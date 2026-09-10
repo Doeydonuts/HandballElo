@@ -295,10 +295,10 @@ margin-bottom:-2px;
         <tbody id="logBody"></tbody>
       </table>
     </section>
-    <section id="loaderSection">
-      <h2>Load data</h2>
+    <section id="loaderSection" style="display:none;">
+      <h2>Bulk import from CSV (admin, one-time)</h2>
       <div class="loader" id="dropzone">
-        Drop <code>players.csv</code> and <code>matches.csv</code> here, or <span class="browse" id="browseBtn">choose files</span>.
+        Drop <code>players.csv</code> and/or <code>matches.csv</code> here, or <span class="browse" id="browseBtn">choose files</span>, to import them into Firestore. Only needed once — add new results below instead.
         <input type="file" id="fileInput" accept=".csv" multiple>
         <div class="loader-files" id="loaderFiles"></div>
       </div>
@@ -362,12 +362,51 @@ margin-bottom:-2px;
           <div class="field"><label>Player A</label><select id="adminPlayerA"></select></div>
           <div class="vs">vs</div>
           <div class="field"><label>Player B</label><select id="adminPlayerB"></select></div>
+        </div>
+        <div class="predictor" style="margin-top:12px;">
+          <div class="field"><label>League (optional)</label><input type="text" id="newFixtureLeague" placeholder="e.g. Varsity"></div>
           <button class="btn-primary" id="createFixtureBtn">Open for betting</button>
         </div>
       </div>
       <div class="admin-block">
         <h3>Manage Open Fixtures (Settle / Delete &amp; Refund)</h3>
         <div id="adminSettleList"><div class="empty">No open fixtures to manage.</div></div>
+      </div>
+      <div class="admin-block">
+        <h3>Manage Players</h3>
+        <div class="predictor" style="align-items:flex-end;">
+          <div class="field"><label>Player name</label><input type="text" id="newPlayerName" placeholder="New player name"></div>
+          <div class="field"><label>Starting Elo</label><input type="number" id="newPlayerElo" value="1000"></div>
+          <button class="btn-primary" id="addPlayerBtn">Add player</button>
+        </div>
+        <div class="form-error" id="playerAdminError" style="margin-top:8px;"></div>
+        <table class="board" style="margin-top:14px;">
+          <thead><tr><th>Player</th><th>Starting Elo</th><th></th></tr></thead>
+          <tbody id="adminPlayersBody"></tbody>
+        </table>
+      </div>
+      <div class="admin-block">
+        <h3>Add Match Result</h3>
+        <div class="predictor" style="align-items:flex-end;">
+          <div class="field"><label>Player A</label><select id="newMatchPlayerA"></select></div>
+          <div class="vs">vs</div>
+          <div class="field"><label>Player B</label><select id="newMatchPlayerB"></select></div>
+        </div>
+        <div class="predictor" style="align-items:flex-end; margin-top:12px;">
+          <div class="field"><label>Winner</label><select id="newMatchWinner"></select></div>
+          <div class="field"><label>Date</label><input type="date" id="newMatchDate"></div>
+          <div class="field"><label>League (optional)</label><input type="text" id="newMatchLeague" placeholder="e.g. Varsity"></div>
+          <button class="btn-primary" id="addMatchBtn">Add result</button>
+        </div>
+        <div class="form-error" id="matchAdminError" style="margin-top:8px;"></div>
+      </div>
+      <div class="admin-block">
+        <h3>Edit Match Log</h3>
+        <div class="log-controls"><input type="text" id="adminMatchSearch" placeholder="Search a player name…"></div>
+        <table class="board">
+          <thead><tr><th>Date</th><th>League</th><th>Match</th><th>Winner</th><th>Status</th><th></th></tr></thead>
+          <tbody id="adminMatchesBody"></tbody>
+        </table>
       </div>
       <div class="admin-block">
         <h3>Rating Engine Settings</h3>
@@ -728,13 +767,28 @@ async function tryAutoLoad(){
 function handleFiles(fileList){
   const files = Array.from(fileList);
   const readers = files.map(f=>f.text().then(text=>({ name:f.name.toLowerCase(), text })));
-  Promise.all(readers).then(results=>{
+  Promise.all(readers).then(async results=>{
+    let newPlayers = null, newMatches = null;
     results.forEach(r=>{
-      if(r.name.includes('player')) playersRaw=parseCSV(r.text);
-      else if(r.name.includes('match')) matchesRaw=parseCSV(r.text);
+      if(r.name.includes('player')) newPlayers = parseCSV(r.text);
+      else if(r.name.includes('match')) newMatches = parseCSV(r.text);
     });
-    document.getElementById('loaderFiles').textContent = files.map(f=>f.name).join(' · ');
-    if(playersRaw.length || matchesRaw.length){ setStatus(''); renderAll(); }
+    const namesJoined = files.map(f=>f.name).join(' · ');
+    if(typeof window.onCsvFilesParsed === 'function' && (newPlayers || newMatches)){
+      document.getElementById('loaderFiles').textContent = namesJoined + ' — importing into Firestore…';
+      try{
+        await window.onCsvFilesParsed(newPlayers, newMatches);
+        document.getElementById('loaderFiles').textContent = namesJoined + ' — imported ✓ (Firestore now has this data)';
+      }catch(err){
+        document.getElementById('loaderFiles').textContent = 'Import failed: ' + (err.message || err);
+      }
+    }else{
+      // No Firestore available — fall back to local-only preview (legacy behavior)
+      if(newPlayers) playersRaw = newPlayers;
+      if(newMatches) matchesRaw = newMatches;
+      document.getElementById('loaderFiles').textContent = namesJoined;
+      if(playersRaw.length || matchesRaw.length){ setStatus(''); renderAll(); }
+    }
   });
 }
 
@@ -748,12 +802,18 @@ function initLoader(){
   dropzone.addEventListener('drop', e=>handleFiles(e.dataTransfer.files));
 }
 
-(async function init(){
-  initLoader();
+// Exposed so the Firebase module script can drive the loading UI/status text,
+// and so it can fall back to the old CSV-fetch flow if Firebase isn't configured at all.
+window.setEloLoadingStatus = setStatus;
+window.initEloDataFallbackCSV = async function(){
+  document.getElementById('loaderSection').style.display = 'block';
   setStatus('Loading players.csv and matches.csv…');
   const ok = await tryAutoLoad();
   if(!ok) setStatus('Could not auto-load players.csv / matches.csv from this folder — drop them in below.');
-})();
+};
+
+initLoader();
+setStatus('Loading match data…');
 </script>
 
 <script type="module">
@@ -772,6 +832,7 @@ try{
   console.error("Failed to load firebase-config.js:", e);
   document.getElementById('bettingSetupNotice').style.display='block';
   document.getElementById('authSection').style.display='none';
+  if(typeof window.initEloDataFallbackCSV === 'function') window.initEloDataFallbackCSV();
 }
 
 const STARTING_TOKENS = 1000;
@@ -791,6 +852,35 @@ if(firebaseConfig){
   let unsubNameChanges = null;
   let unsubAllUsers = null;
   let allUsersCache = [];
+  let playersDocsCache = [];
+  let editingMatchId = null;
+
+  onSnapshot(collection(db,'players'), snap=>{
+    playersDocsCache = snap.docs.map(d=>({ id:d.id, player: d.data().player, starting_elo: Number(d.data().starting_elo) || DEFAULT_ELO }));
+    playersRaw = playersDocsCache.map(p=>({ player: p.player, starting_elo: String(p.starting_elo) }));
+    document.getElementById('loaderSection').style.display = isAdmin ? 'block' : 'none';
+    if(typeof window.setEloLoadingStatus === 'function') window.setEloLoadingStatus('');
+    renderAll();
+    renderAdminPlayers();
+  });
+
+  onSnapshot(collection(db,'matches'), snap=>{
+    matchesRaw = snap.docs.map(d=>{
+      const data = d.data();
+      return {
+        id: d.id,
+        date: data.date || '',
+        league: data.league || '',
+        player_a: data.player_a,
+        player_b: data.player_b,
+        winner: data.winner,
+        status: data.status || 'confirmed'
+      };
+    });
+    if(typeof window.setEloLoadingStatus === 'function') window.setEloLoadingStatus('');
+    renderAll();
+    renderAdminMatches();
+  });
 
   onSnapshot(doc(db, 'settings', 'engine'), snap => {
     if(snap.exists()){
@@ -800,6 +890,34 @@ if(firebaseConfig){
       if(typeof renderAll === 'function') renderAll();
     }
   });
+
+  window.onCsvFilesParsed = async function(newPlayers, newMatches){
+    if(!isAdmin) throw new Error('Only admins can import data.');
+    if(newPlayers){
+      for(const p of newPlayers){
+        if(!p.player) continue;
+        await addDoc(collection(db,'players'), {
+          player: p.player,
+          starting_elo: Number(p.starting_elo) || DEFAULT_ELO,
+          createdAt: serverTimestamp()
+        });
+      }
+    }
+    if(newMatches){
+      for(const m of newMatches){
+        if(!m.player_a || !m.player_b) continue;
+        await addDoc(collection(db,'matches'), {
+          date: m.date || '',
+          league: m.league || '',
+          player_a: m.player_a,
+          player_b: m.player_b,
+          winner: m.winner || '',
+          status: (m.status||'confirmed').toLowerCase(),
+          createdAt: serverTimestamp()
+        });
+      }
+    }
+  };
 
   document.getElementById('signupForm').addEventListener('submit', async(e)=>{
     e.preventDefault();
@@ -949,11 +1067,14 @@ if(firebaseConfig){
         document.getElementById('adminSection').style.display = isAdmin ? 'block' : 'none';
         document.getElementById('adminNameChangesSection').style.display = isAdmin ? 'block' : 'none';
         document.getElementById('adminAllUsersSection').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('loaderSection').style.display = isAdmin ? 'block' : 'none';
 
         if(isAdmin){
           listenToNameChanges();
           listenToAllUsers();
           renderAdminSettleList();
+          renderAdminPlayers();
+          renderAdminMatches();
         }
 
         if(isAdmin && window.__eloBoard && typeof window.onEloUpdated === 'function'){
@@ -976,6 +1097,7 @@ if(firebaseConfig){
       document.getElementById('adminSection').style.display='none';
       document.getElementById('adminNameChangesSection').style.display='none';
       document.getElementById('adminAllUsersSection').style.display='none';
+      document.getElementById('loaderSection').style.display='none';
       renderProfileStats();
     }
   });
@@ -1250,11 +1372,35 @@ if(firebaseConfig){
     if(!isAdmin) return;
     const a = document.getElementById('adminPlayerA');
     const b = document.getElementById('adminPlayerB');
-    if(!a || !b) return;
-    const opts = board.map(p=>`<option value="${escapeAttrBet(p.player)}">${escapeHtmlBet(p.player)} (${Math.round(p.elo)})</option>`).join('');
-    a.innerHTML=opts; b.innerHTML=opts;
-    if(board.length > 1){ a.selectedIndex=0; b.selectedIndex=1; }
+    if(a && b){
+      const opts = board.map(p=>`<option value="${escapeAttrBet(p.player)}">${escapeHtmlBet(p.player)} (${Math.round(p.elo)})</option>`).join('');
+      a.innerHTML=opts; b.innerHTML=opts;
+      if(board.length > 1){ a.selectedIndex=0; b.selectedIndex=1; }
+    }
+    const ma = document.getElementById('newMatchPlayerA');
+    const mb = document.getElementById('newMatchPlayerB');
+    if(ma && mb){
+      const prevA = ma.value, prevB = mb.value;
+      const opts2 = board.map(p=>`<option value="${escapeAttrBet(p.player)}">${escapeHtmlBet(p.player)}</option>`).join('');
+      ma.innerHTML = opts2; mb.innerHTML = opts2;
+      if(board.some(p=>p.player===prevA)) ma.value = prevA; else if(board.length) ma.selectedIndex = 0;
+      if(board.some(p=>p.player===prevB)) mb.value = prevB; else if(board.length>1) mb.selectedIndex = 1;
+      updateMatchWinnerOptions();
+    }
   };
+
+  function updateMatchWinnerOptions(){
+    const ma = document.getElementById('newMatchPlayerA');
+    const mb = document.getElementById('newMatchPlayerB');
+    const winnerSel = document.getElementById('newMatchWinner');
+    if(!ma || !mb || !winnerSel) return;
+    const a = ma.value, b = mb.value;
+    const prevWinner = winnerSel.value;
+    winnerSel.innerHTML = [a,b].filter(Boolean).map(n=>`<option value="${escapeAttrBet(n)}">${escapeHtmlBet(n)}</option>`).join('');
+    if([a,b].includes(prevWinner)) winnerSel.value = prevWinner;
+  }
+  document.getElementById('newMatchPlayerA').addEventListener('change', updateMatchWinnerOptions);
+  document.getElementById('newMatchPlayerB').addEventListener('change', updateMatchWinnerOptions);
 
   if(window.__eloBoard && isAdmin) window.onEloUpdated(window.__eloBoard);
 
@@ -1262,6 +1408,7 @@ if(firebaseConfig){
     const board = window.__eloBoard || [];
     const nameA = document.getElementById('adminPlayerA').value;
     const nameB = document.getElementById('adminPlayerB').value;
+    const league = document.getElementById('newFixtureLeague').value.trim();
     if(!nameA || !nameB || nameA===nameB) return;
     const pa = board.find(p=>p.player===nameA);
     const pb = board.find(p=>p.player===nameB);
@@ -1269,10 +1416,163 @@ if(firebaseConfig){
     const probA = window.expectedScore(pa.elo, pb.elo);
     const probB = 1-probA;
     await addDoc(collection(db,'fixtures'), {
-      playerA: nameA, playerB: nameB, probA, probB,
+      playerA: nameA, playerB: nameB, league, probA, probB,
       oddsA: 1/probA, oddsB: 1/probB, status: 'open', winner: null, createdAt: serverTimestamp()
     });
+    document.getElementById('newFixtureLeague').value='';
   });
+
+  document.getElementById('addPlayerBtn').addEventListener('click', async()=>{
+    const errEl = document.getElementById('playerAdminError');
+    errEl.textContent='';
+    const name = document.getElementById('newPlayerName').value.trim();
+    const elo = Number(document.getElementById('newPlayerElo').value) || DEFAULT_ELO;
+    if(!name){ errEl.textContent = 'Enter a player name.'; return; }
+    if(playersDocsCache.some(p=>p.player.toLowerCase()===name.toLowerCase())){
+      errEl.textContent = 'A player with that name already exists.';
+      return;
+    }
+    try{
+      await addDoc(collection(db,'players'), { player: name, starting_elo: elo, createdAt: serverTimestamp() });
+      document.getElementById('newPlayerName').value='';
+      document.getElementById('newPlayerElo').value=1000;
+    }catch(err){ errEl.textContent = 'Failed to add player.'; }
+  });
+
+  function renderAdminPlayers(){
+    if(!isAdmin) return;
+    const body = document.getElementById('adminPlayersBody');
+    if(!body) return;
+    if(!playersDocsCache.length){
+      body.innerHTML = '<tr><td colspan="3" class="empty">No players added yet — they also appear automatically once they play a match.</td></tr>';
+      return;
+    }
+    body.innerHTML = playersDocsCache.map(p=>`
+      <tr>
+        <td class="player-name">${escapeHtmlBet(p.player)}</td>
+        <td><input type="number" value="${Math.round(p.starting_elo)}" style="width:100px;" data-elo-input="${p.id}"></td>
+        <td style="display:flex; gap:6px;">
+          <button type="button" class="btn-secondary" data-save-player="${p.id}">Save</button>
+          <button type="button" class="btn-danger" data-delete-player="${p.id}">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+    body.querySelectorAll('[data-save-player]').forEach(btn=>{
+      btn.addEventListener('click', async()=>{
+        const id = btn.dataset.savePlayer;
+        const input = body.querySelector(`[data-elo-input="${id}"]`);
+        const newElo = Number(input.value);
+        if(isNaN(newElo)) return;
+        try{ await updateDoc(doc(db,'players',id), { starting_elo: newElo }); }
+        catch(err){ alert('Failed to update player.'); }
+      });
+    });
+    body.querySelectorAll('[data-delete-player]').forEach(btn=>{
+      btn.addEventListener('click', async()=>{
+        if(!confirm('Delete this player entry? Existing match history keeps their name — this only removes their custom starting Elo.')) return;
+        try{ await deleteDoc(doc(db,'players',btn.dataset.deletePlayer)); }
+        catch(err){ alert('Failed to delete player.'); }
+      });
+    });
+  }
+
+  document.getElementById('addMatchBtn').addEventListener('click', async()=>{
+    const errEl = document.getElementById('matchAdminError');
+    errEl.textContent='';
+    const a = document.getElementById('newMatchPlayerA').value;
+    const b = document.getElementById('newMatchPlayerB').value;
+    const winner = document.getElementById('newMatchWinner').value;
+    const date = document.getElementById('newMatchDate').value || new Date().toISOString().slice(0,10);
+    const league = document.getElementById('newMatchLeague').value.trim();
+    if(!a || !b || a===b){ errEl.textContent = 'Pick two different players.'; return; }
+    if(![a,b].includes(winner)){ errEl.textContent = 'Pick a valid winner.'; return; }
+    try{
+      await addDoc(collection(db,'matches'), {
+        date, league, player_a:a, player_b:b, winner, status:'confirmed', createdAt: serverTimestamp()
+      });
+      document.getElementById('newMatchLeague').value='';
+    }catch(err){ errEl.textContent = 'Failed to add match.'; }
+  });
+
+  function renderAdminMatches(){
+    if(!isAdmin) return;
+    const body = document.getElementById('adminMatchesBody');
+    const searchInput = document.getElementById('adminMatchSearch');
+    if(!body || !searchInput) return;
+    const searchTerm = (searchInput.value||'').toLowerCase();
+    let rows = matchesRaw.slice().filter(m=>{
+      if(!searchTerm) return true;
+      return (m.player_a||'').toLowerCase().includes(searchTerm) || (m.player_b||'').toLowerCase().includes(searchTerm);
+    });
+    rows.sort((x,y)=>(y.date||'').localeCompare(x.date||''));
+    if(!rows.length){ body.innerHTML = '<tr><td colspan="6" class="empty">No matches found.</td></tr>'; return; }
+    body.innerHTML = rows.map(m=>{
+      if(editingMatchId === m.id){
+        const winnerOpts = [m.player_a, m.player_b].map(n=>`<option value="${escapeAttrBet(n)}" ${n===m.winner?'selected':''}>${escapeHtmlBet(n)}</option>`).join('');
+        return `
+          <tr>
+            <td><input type="date" value="${m.date||''}" data-edit-date="${m.id}" style="width:140px;"></td>
+            <td><input type="text" value="${escapeAttrBet(m.league||'')}" data-edit-league="${m.id}" style="width:110px;"></td>
+            <td>${escapeHtmlBet(m.player_a)} vs ${escapeHtmlBet(m.player_b)}</td>
+            <td><select data-edit-winner="${m.id}">${winnerOpts}</select></td>
+            <td>
+              <select data-edit-status="${m.id}">
+                <option value="confirmed" ${m.status!=='voided'?'selected':''}>confirmed</option>
+                <option value="voided" ${m.status==='voided'?'selected':''}>voided</option>
+              </select>
+            </td>
+            <td style="display:flex; gap:6px;">
+              <button type="button" class="btn-primary" data-save-match="${m.id}">Save</button>
+              <button type="button" class="btn-ghost" data-cancel-edit="${m.id}">Cancel</button>
+            </td>
+          </tr>
+        `;
+      }
+      const status = (m.status||'confirmed').toLowerCase();
+      const badgeClass = status === 'voided' ? 'status-voided' : 'status-confirmed';
+      return `
+        <tr>
+          <td>${escapeHtmlBet(m.date||'—')}</td>
+          <td>${escapeHtmlBet(m.league||'—')}</td>
+          <td>${escapeHtmlBet(m.player_a)} vs ${escapeHtmlBet(m.player_b)}</td>
+          <td>${escapeHtmlBet(m.winner||'—')}</td>
+          <td><span class="status-badge ${badgeClass}">${escapeHtmlBet(status)}</span></td>
+          <td style="display:flex; gap:6px;">
+            <button type="button" class="btn-secondary" data-edit-match="${m.id}">Edit</button>
+            <button type="button" class="btn-danger" data-delete-match="${m.id}">Delete</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    body.querySelectorAll('[data-edit-match]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ editingMatchId = btn.dataset.editMatch; renderAdminMatches(); });
+    });
+    body.querySelectorAll('[data-cancel-edit]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ editingMatchId = null; renderAdminMatches(); });
+    });
+    body.querySelectorAll('[data-delete-match]').forEach(btn=>{
+      btn.addEventListener('click', async()=>{
+        if(!confirm('Permanently delete this match? This will change historical Elo.')) return;
+        try{ await deleteDoc(doc(db,'matches',btn.dataset.deleteMatch)); }
+        catch(err){ alert('Failed to delete match.'); }
+      });
+    });
+    body.querySelectorAll('[data-save-match]').forEach(btn=>{
+      btn.addEventListener('click', async()=>{
+        const id = btn.dataset.saveMatch;
+        const date = body.querySelector(`[data-edit-date="${id}"]`).value;
+        const league = body.querySelector(`[data-edit-league="${id}"]`).value.trim();
+        const winner = body.querySelector(`[data-edit-winner="${id}"]`).value;
+        const status = body.querySelector(`[data-edit-status="${id}"]`).value;
+        try{
+          await updateDoc(doc(db,'matches',id), { date, league, winner, status });
+          editingMatchId = null;
+        }catch(err){ alert('Failed to save match.'); }
+      });
+    });
+  }
+  document.getElementById('adminMatchSearch').oninput = renderAdminMatches;
 
   document.getElementById('updateEngineBtn').addEventListener('click', async()=>{
     const newDivisor = Number(document.getElementById('adminDivisorInput').value);
@@ -1312,7 +1612,8 @@ if(firebaseConfig){
   }
 
   async function settleFixture(fixtureId, winner){
-    if(!confirm(`Settle this fixture as a win for ${winner}? This pays out all pending bets.`)) return;
+    if(!confirm(`Settle this fixture as a win for ${winner}? This pays out all pending bets and records a match result.`)) return;
+    const fixture = fixturesCache.find(f=>f.id===fixtureId);
     const betsSnap = await getDocs(query(collection(db,'bets'), where('fixtureId','==',fixtureId), where('status','==','pending')));
     for(const betDoc of betsSnap.docs){
       const bet = betDoc.data();
@@ -1336,6 +1637,26 @@ if(firebaseConfig){
       }
     }
     await updateDoc(doc(db,'fixtures',fixtureId), { status: 'settled', winner });
+
+    // Settling a fixture also records the result as a match, so it feeds
+    // into the Elo leaderboard. Deleting a fixture (below) never does this.
+    if(fixture){
+      try{
+        await addDoc(collection(db,'matches'), {
+          date: new Date().toISOString().slice(0,10),
+          league: fixture.league || '',
+          player_a: fixture.playerA,
+          player_b: fixture.playerB,
+          winner,
+          status: 'confirmed',
+          fixtureId,
+          createdAt: serverTimestamp()
+        });
+      }catch(err){
+        console.error('Failed to record match result for fixture', fixtureId, err);
+        alert('Bets were settled, but recording the match result failed — add it manually under "Add Match Result".');
+      }
+    }
   }
 
   async function deleteFixtureAndRefund(fixtureId){
