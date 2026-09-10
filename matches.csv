@@ -1,0 +1,5 @@
+date,league,player_a,player_b,winner,status
+2026-02-03,League A,Jonan,B,Jonan,confirmed
+2026-02-05,League A,B,Jonan,B,confirmed
+2026-02-10,League A,Jonan,B,,voided
+2026-02-12,League A,Jonan,B,Jonan,confirmed
