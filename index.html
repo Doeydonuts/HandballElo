@@ -106,7 +106,7 @@ font-weight:600;
 .predictor{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;}
 .field{display:flex;flex-direction:column;gap:6px;}
 .field label{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);font-weight:600;}
-select{
+select, input[type=number]{
 padding:10px 12px;
 border:1px solid var(--concrete-line);
 border-radius:4px;
@@ -183,10 +183,11 @@ margin-bottom:-2px;
 .side-btn .name{font-weight:700;display:block;}
 .side-btn .odds{font-size:0.82rem;color:var(--ink-muted);}
 .bet-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-.bet-row input[type=number]{width:110px;padding:9px 12px;border:1px solid var(--concrete-line);border-radius:4px;background:var(--court);color:var(--ink);}
+.bet-row input[type=number]{width:110px;}
 .bet-note{font-size:0.82rem;color:var(--ink-muted);margin-top:8px;}
 .admin-block{border-top:1px solid var(--concrete-line);padding-top:16px;margin-top:16px;}
 .settle-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--concrete-line);}
+.leaderboard-controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px;}
 </style>
 </head>
 <body>
@@ -207,6 +208,16 @@ margin-bottom:-2px;
     <nav class="leagues" id="leagueNav" style="display:none;"></nav>
     <section id="leaderboardSection" style="display:none;">
       <h2>Leaderboard <span class="meta" id="lbMeta"></span></h2>
+      <div class="leaderboard-controls">
+        <div id="lbSubtitle" style="font-size:0.85rem; color:var(--ink-muted);">Showing top 10 players</div>
+        <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
+          <label for="lbViewMode" style="margin:0;">View:</label>
+          <select id="lbViewMode" style="min-width:140px; padding:6px 10px;">
+            <option value="top10">Top 10 Only</option>
+            <option value="all">Everyone</option>
+          </select>
+        </div>
+      </div>
       <table class="board">
         <thead><tr><th>#</th><th>Player</th><th>Elo</th><th>Record</th><th>Win %</th></tr></thead>
         <tbody id="lbBody"></tbody>
@@ -304,6 +315,14 @@ margin-bottom:-2px;
         <h3>Settle a fixture</h3>
         <div id="adminSettleList"></div>
       </div>
+      <div class="admin-block">
+        <h3>Rating Engine Settings</h3>
+        <div class="predictor" style="align-items:flex-end;">
+          <div class="field"><label>Divisor</label><input type="number" id="adminDivisorInput" value="400"></div>
+          <div class="field"><label>K-Factor</label><input type="number" id="adminKInput" value="25"></div>
+          <button class="btn-secondary" id="updateEngineBtn">Apply Engine Changes</button>
+        </div>
+      </div>
     </section>
 
     <div class="empty" id="bettingSetupNotice" style="display:none;">
@@ -311,12 +330,12 @@ margin-bottom:-2px;
     </div>
   </div>
 
-  <footer>Elo divisor 400 · K-factor 25 · recomputed fresh from the match log on every load</footer>
+  <footer id="footerText">Elo divisor 400 · K-factor 25 · recomputed fresh from the match log on every load</footer>
 </div>
 
 <script>
-const DIVISOR = 400;
-const K = 25;
+let DIVISOR = 400;
+let K = 25;
 const DEFAULT_ELO = 1000;
 const AUTO_FILES = ['players.csv', 'matches.csv'];
 let playersRaw = [];
@@ -420,11 +439,18 @@ function renderLeaderboard(board){
   const section = document.getElementById('leaderboardSection');
   const body = document.getElementById('lbBody');
   const meta = document.getElementById('lbMeta');
+  const subtitle = document.getElementById('lbSubtitle');
+  const viewMode = document.getElementById('lbViewMode').value;
+  
   if(!board.length){ section.style.display='none'; return; }
   section.style.display='block';
-  meta.textContent = board.length + ' players';
+  
+  const displayBoard = viewMode === 'top10' ? board.slice(0, 10) : board;
+  meta.textContent = `${displayBoard.length} of ${board.length} players`;
+  subtitle.textContent = viewMode === 'top10' ? 'Showing top 10 players' : 'Showing all players';
+  
   body.innerHTML='';
-  board.forEach((p,i)=>{
+  displayBoard.forEach((p,i)=>{
     const winPct = p.games ? Math.round(100*p.wins/p.games) : 0;
     const rankClass = i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '';
     const tr = document.createElement('tr');
@@ -443,6 +469,8 @@ function renderLeaderboard(board){
     body.appendChild(tr);
   });
 }
+
+document.getElementById('lbViewMode').onchange = ()=>renderAll();
 
 function renderPredictor(board){
   const section = document.getElementById('predictSection');
@@ -515,6 +543,7 @@ function renderAll(){
   };
   window.__eloBoard = board;
   if(typeof window.onEloUpdated === 'function') window.onEloUpdated(board);
+  document.getElementById('footerText').textContent = `Elo divisor ${DIVISOR} · K-factor ${K} · recomputed fresh from the match log on every load`;
 }
 
 document.querySelectorAll('.maintab').forEach(btn=>{
@@ -589,12 +618,9 @@ try{
   firebaseConfig = configModule.firebaseConfig;
   ADMIN_UIDS = configModule.ADMIN_UIDS;
 }catch(e){
-  // This will now show you the exact reason firebase-config.js failed
-  document.body.innerHTML = `<div style="padding: 40px; color: #ff5555; font-family: monospace;">
-    <h3>Configuration Error:</h3>
-    <p>${e.message}</p>
-    <p>Make sure firebase-config.js is in the same folder and uses "export const".</p>
-  </div>`;
+  console.error("Failed to load firebase-config.js:", e);
+  document.getElementById('bettingSetupNotice').style.display='block';
+  document.getElementById('authSection').style.display='none';
 }
 
 const STARTING_TOKENS = 1000;
@@ -615,8 +641,7 @@ if(firebaseConfig){
 
   document.getElementById('signupForm').addEventListener('submit', async(e)=>{
     e.preventDefault();
-    const usernameInput = document.getElementById('signupUsername');
-    const username = usernameInput.value.trim();
+    const username = document.getElementById('signupUsername').value.trim();
     const password = document.getElementById('signupPassword').value;
     const errEl = document.getElementById('signupError');
     errEl.textContent='';
@@ -627,20 +652,13 @@ if(firebaseConfig){
     }
 
     try{
-      // Creates the auth account using the email conversion trick
       const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(username), password);
-      
-      // Explicitly saves your typed username to Firestore
-      await setDoc(doc(db,'users',cred.user.uid), { 
-        username: username, 
-        tokens: STARTING_TOKENS, 
-        createdAt: serverTimestamp() 
-      });
+      await setDoc(doc(db,'users',cred.user.uid), { username, tokens: STARTING_TOKENS, createdAt: serverTimestamp() });
     }catch(err){
       errEl.textContent = friendlyAuthError(err);
     }
   });
-  
+
   document.getElementById('loginForm').addEventListener('submit', async(e)=>{
     e.preventDefault();
     const username = document.getElementById('loginUsername').value.trim();
@@ -688,8 +706,6 @@ if(firebaseConfig){
         currentTokens = data.tokens;
         isAdmin = Array.isArray(ADMIN_UIDS) && ADMIN_UIDS.includes(currentUid);
 
-        document.getElementById('accountName').textContent = currentUsername;
-        document.getElementById('tokenBalance').textContent = Math.round(currentTokens) + ' tokens';
         document.getElementById('adminSection').style.display = isAdmin ? 'block' : 'none';
 
         if(isAdmin && window.__eloBoard && typeof window.onEloUpdated === 'function'){
@@ -865,6 +881,19 @@ if(firebaseConfig){
       playerA: nameA, playerB: nameB, probA, probB,
       oddsA: 1/probA, oddsB: 1/probB, status: 'open', winner: null, createdAt: serverTimestamp()
     });
+  });
+
+  document.getElementById('updateEngineBtn').addEventListener('click', ()=>{
+    const newDivisor = Number(document.getElementById('adminDivisorInput').value);
+    const newK = Number(document.getElementById('adminKInput').value);
+    if(!newDivisor || !newK) return;
+
+    if(confirm('Are you sure you want to update the Elo rating engine divisor and K-factor? This will recompute all standings.')){
+      DIVISOR = newDivisor;
+      K = newK;
+      renderAll();
+      alert('Engine parameters updated successfully!');
+    }
   });
 
   function renderAdminSettleList(){
