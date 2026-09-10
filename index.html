@@ -104,8 +104,11 @@ font-weight:600;
 .elo-val{font-weight:800;font-size:1.05rem;}
 .winpct-bar{height:6px;background:var(--concrete);border-radius:3px;overflow:hidden;min-width:60px;}
 .winpct-bar div{height:100%;background:var(--accent-dim);}
-.predictor{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;}
+.predictor{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;width:100%;justify-content:space-between;}
 .field{display:flex;flex-direction:column;gap:6px;position:relative;}
+.predictor .field{flex:1 1 200px;min-width:160px;}
+.predictor .field.field-right{align-items:flex-end;text-align:right;}
+.predictor .field.field-right input{text-align:right;}
 .field label{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);font-weight:600;}
 select, input[type=number], input[type=text]{
 padding:10px 12px;
@@ -115,8 +118,9 @@ font-size:0.95rem;
 background:var(--court);
 color:var(--ink);
 min-width:180px;
+width:100%;
 }
-.vs{font-weight:800;font-size:1.1rem;color:var(--ink-muted);padding-bottom:10px;}
+.vs{font-weight:800;font-size:1.1rem;color:var(--ink-muted);padding-bottom:10px;flex:0 0 auto;}
 .predict-result{
 margin-top:18px;
 display:flex;
@@ -154,11 +158,13 @@ font-size:0.9rem;
 background:var(--court-dim);
 color:var(--accent);
 }
-.log-controls{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.log-controls{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
 .log-controls input[type=text]{
 flex:1;
 min-width:180px;
 }
+.log-view-select{display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--ink-muted);}
+.log-view-select select{min-width:140px;padding:6px 10px;}
 .status-badge{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:700;padding:3px 8px;border-radius:3px;}
 .status-confirmed{background:rgba(91,168,91,0.15);color:#7AC17A;}
 .status-voided{background:rgba(217,107,67,0.15);color:var(--loss);text-decoration:line-through;}
@@ -192,9 +198,10 @@ margin-bottom:-2px;
 .btn-danger{background:transparent;color:var(--loss);border-color:var(--loss);}
 .form-error{color:var(--loss);font-size:0.82rem;min-height:1.1em;}
 .form-warning{color:var(--warning);font-size:0.85rem;font-weight:600;background:rgba(212,175,55,0.1);padding:10px;border-radius:4px;border-left:3px solid var(--warning);margin-bottom:10px;}
-.account-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 18px;background:rgba(199,216,44,0.10);border-radius:6px;}
+.account-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 18px;background:rgba(199,216,44,0.10);border-radius:6px;}
 .account-name{font-weight:800;}
-.token-balance{font-weight:800;font-size:1.2rem;color:var(--ink);margin-left:auto;text-align:right;}
+.token-balance{font-weight:800;font-size:1.2rem;color:var(--ink);}
+.logout-btn-wrap{margin-left:auto;}
 .fixture-card{border:1px solid var(--concrete-line);border-radius:6px;padding:16px;margin-bottom:12px;}
 .fixture-title{font-weight:800;margin-bottom:10px;}
 .fixture-sides{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
@@ -262,7 +269,7 @@ margin-bottom:-2px;
           <div id="predBSuggestions" class="suggestions-dropdown"></div>
         </div>
         <div class="vs">vs</div>
-        <div class="field">
+        <div class="field field-right">
           <label>Player A</label>
           <input type="text" id="predAInput" placeholder="Search player A..." autocomplete="off">
           <div id="predASuggestions" class="suggestions-dropdown"></div>
@@ -273,7 +280,16 @@ margin-bottom:-2px;
     </section>
     <section id="logSection" style="display:none;">
       <h2>Match log <span class="meta" id="logMeta"></span></h2>
-      <div class="log-controls"><input type="text" id="logSearch" placeholder="Search a player name…"></div>
+      <div class="log-controls">
+        <input type="text" id="logSearch" placeholder="Search a player name…">
+        <div class="log-view-select">
+          <label for="logViewMode">View:</label>
+          <select id="logViewMode">
+            <option value="recent10">Recent 10</option>
+            <option value="all">All games</option>
+          </select>
+        </div>
+      </div>
       <table class="board">
         <thead><tr><th>Date</th><th>League</th><th>Match</th><th>Winner</th><th>Status</th></tr></thead>
         <tbody id="logBody"></tbody>
@@ -312,7 +328,7 @@ margin-bottom:-2px;
         <div class="account-bar">
           <div><span class="account-name" id="accountName"></span> <span class="meta">is playing with</span></div>
           <div class="token-balance" id="tokenBalance">—</div>
-          <button class="btn-ghost" id="logoutBtn">Log out</button>
+          <div class="logout-btn-wrap"><button class="btn-ghost" id="logoutBtn">Log out</button></div>
         </div>
       </div>
     </section>
@@ -609,10 +625,14 @@ function renderLog(history){
   section.style.display='block';
   meta.textContent = history.length + ' games';
   const searchTerm = (document.getElementById('logSearch').value || '').toLowerCase();
-  const rows = history.slice().reverse().filter(m=>{
+  const viewMode = document.getElementById('logViewMode').value;
+  let rows = history.slice().reverse().filter(m=>{
     if(!searchTerm) return true;
     return m.player_a.toLowerCase().includes(searchTerm) || m.player_b.toLowerCase().includes(searchTerm);
   });
+  if(viewMode === 'recent10' && !searchTerm){
+    rows = rows.slice(0, 10);
+  }
   body.innerHTML = rows.map(m=>{
     const status = (m.status||'confirmed').toLowerCase();
     const badgeClass = status === 'voided' ? 'status-voided' : 'status-confirmed';
@@ -641,6 +661,10 @@ function renderAll(){
   renderPredictor(board);
   renderLog(history);
   document.getElementById('logSearch').oninput=()=>{
+    const { history } = computeStandings(matchesRaw, playersRaw, currentLeague);
+    renderLog(history);
+  };
+  document.getElementById('logViewMode').onchange=()=>{
     const { history } = computeStandings(matchesRaw, playersRaw, currentLeague);
     renderLog(history);
   };
@@ -997,8 +1021,13 @@ if(firebaseConfig){
     renderMyBets();
   });
 
-  onSnapshot(query(collection(db,'fixtures'), orderBy('createdAt','desc')), snap=>{
+  onSnapshot(collection(db,'fixtures'), snap=>{
     fixturesCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+    fixturesCache.sort((a,b)=>{
+      const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return tb - ta;
+    });
     renderFixtures();
     renderAdminSettleList();
   });
@@ -1113,23 +1142,24 @@ if(firebaseConfig){
       return;
     }
 
-    body.innerHTML='';
-    userBets.forEach(b=>{
+    const rowsHtml = userBets.map(b=>{
       let resultLabel = 'Pending';
       let cls = '';
       if(b.status === 'won'){ resultLabel = `Won +${b.potentialPayout}`; cls = 'status-confirmed'; }
       else if(b.status === 'lost'){ resultLabel = 'Lost'; cls = 'status-voided'; }
       else if(b.status === 'refunded'){ resultLabel = 'Refunded'; cls = ''; }
-      body.innerHTML += `
+      const oddsDisplay = (typeof b.odds === 'number' ? b.odds : Number(b.odds) || 0).toFixed(2);
+      return `
         <tr>
-          <td>${escapeHtmlBet(b.matchup)}</td>
-          <td>${escapeHtmlBet(b.pick)}</td>
-          <td>${b.amount}</td>
-          <td>${b.odds.toFixed(2)}x</td>
+          <td>${escapeHtmlBet(b.matchup||'')}</td>
+          <td>${escapeHtmlBet(b.pick||'')}</td>
+          <td>${b.amount ?? 0}</td>
+          <td>${oddsDisplay}x</td>
           <td><span class="status-badge ${cls}">${resultLabel}</span></td>
         </tr>
       `;
-    });
+    }).join('');
+    body.innerHTML = rowsHtml;
   }
 
   window.onEloUpdated=function(board){
@@ -1203,16 +1233,23 @@ if(firebaseConfig){
     for(const betDoc of betsSnap.docs){
       const bet = betDoc.data();
       const won = bet.pick===winner;
-      await runTransaction(db, async tx=>{
-        const betRef = doc(db,'bets',betDoc.id);
-        tx.update(betRef, { status: won ? 'won' : 'lost' });
-        if(won){
+      try{
+        await runTransaction(db, async tx=>{
+          const betRef = doc(db,'bets',betDoc.id);
           const userRef = doc(db,'users',bet.uid);
-          const uSnap = await tx.get(userRef);
-          if(!uSnap.exists()) throw new Error('user-not-found');
-          tx.update(userRef, { tokens: uSnap.data().tokens + bet.potentialPayout });
-        }
-      });
+          // IMPORTANT: all reads in a Firestore transaction must happen
+          // before any writes, so the user doc is read here first.
+          const uSnap = won ? await tx.get(userRef) : null;
+          if(won && !uSnap.exists()) throw new Error('user-not-found');
+
+          tx.update(betRef, { status: won ? 'won' : 'lost' });
+          if(won){
+            tx.update(userRef, { tokens: uSnap.data().tokens + bet.potentialPayout });
+          }
+        });
+      }catch(err){
+        console.error('Failed to settle bet', betDoc.id, err);
+      }
     }
     await updateDoc(doc(db,'fixtures',fixtureId), { status: 'settled', winner });
   }
