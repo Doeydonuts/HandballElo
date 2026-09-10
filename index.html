@@ -748,14 +748,10 @@ if(firebaseConfig){
 
   document.getElementById('logoutBtn').addEventListener('click', ()=> signOut(auth));
 
-  function friendlyAuthError(err){
-    const code = err.code || '';
-    if(code.includes('email-already-in-use')) return 'That username is taken.';
-    if(code.includes('wrong-password') || code.includes('invalid-credential')) return 'Wrong username or password.';
-    if(code.includes('user-not-found')) return "That username doesn't exist yet.";
-    if(code.includes('weak-password')) return 'Password needs to be at least 6 characters.';
-    return 'Something went wrong — try again.';
-  }
+function friendlyAuthError(err){
+  console.error('Firebase error:', err);
+  return `${err.code || 'unknown-error'}: ${err.message || 'Something went wrong'}`;
+}
 
   /* ---------- auth state ---------- */
   onAuthStateChanged(auth, (user)=>{
