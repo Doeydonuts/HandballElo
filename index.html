@@ -615,7 +615,8 @@ if(firebaseConfig){
 
   document.getElementById('signupForm').addEventListener('submit', async(e)=>{
     e.preventDefault();
-    const username = document.getElementById('signupUsername').value.trim();
+    const usernameInput = document.getElementById('signupUsername');
+    const username = usernameInput.value.trim();
     const password = document.getElementById('signupPassword').value;
     const errEl = document.getElementById('signupError');
     errEl.textContent='';
@@ -626,13 +627,20 @@ if(firebaseConfig){
     }
 
     try{
+      // Creates the auth account using the email conversion trick
       const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(username), password);
-      await setDoc(doc(db,'users',cred.user.uid), { username, tokens: STARTING_TOKENS, createdAt: serverTimestamp() });
+      
+      // Explicitly saves your typed username to Firestore
+      await setDoc(doc(db,'users',cred.user.uid), { 
+        username: username, 
+        tokens: STARTING_TOKENS, 
+        createdAt: serverTimestamp() 
+      });
     }catch(err){
       errEl.textContent = friendlyAuthError(err);
     }
   });
-
+  
   document.getElementById('loginForm').addEventListener('submit', async(e)=>{
     e.preventDefault();
     const username = document.getElementById('loginUsername').value.trim();
