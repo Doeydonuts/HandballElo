@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Handball Elo</title>
 <style>
+
   :root{
     --chalk:#121212;
     --court:#1E1E1E;
@@ -114,7 +115,7 @@
   .board tr:hover td{background:rgba(199,216,44,0.05);}
   .rank{font-weight:800; width:2.2em; color:var(--ink-muted);}
   .rank{font-weight:800; width:2.2em; color:var(--ink-muted);}
-  .rank.top1{color:##d4af37;} /* Gold */
+  .rank.top1{color:#d4af37;} /* Gold */
   .rank.top2{color:#C0C0C0;} /* Silver */
   .rank.top3{color:#b8702a;} /* Bronze */
   .player-name{font-weight:700;}
@@ -185,6 +186,67 @@
   @media (prefers-reduced-motion:no-preference){
     .board tr td{transition:background 0.15s ease;}
   }
+
+  /* ---- main tabs ---- */
+  nav.maintabs{display:flex; gap:4px; margin-bottom:24px; border-bottom:2px solid var(--ink);}
+  .maintab{
+    border:none; background:transparent; padding:10px 18px; font-size:0.95rem;
+    font-weight:700; color:#8a877d; cursor:pointer; border-bottom:3px solid transparent;
+    margin-bottom:-2px;
+  }
+  .maintab.active{color:var(--ink); border-bottom-color:var(--accent-dim);}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  /* ---- auth ---- */
+  .auth-forms{display:flex; gap:22px; flex-wrap:wrap;}
+  .auth-form{
+    flex:1; min-width:220px; display:flex; flex-direction:column; gap:12px;
+    border:1px solid var(--concrete-line); border-radius:6px; padding:16px;
+  }
+  .auth-form input{padding:9px 12px; border:1px solid var(--concrete); border-radius:4px; font-size:0.95rem;}
+  .btn-primary, .btn-secondary, .btn-ghost{
+    border-radius:4px; padding:10px 18px; font-size:0.9rem; font-weight:700; cursor:pointer; border:1px solid transparent;
+  }
+  .btn-primary{background:var(--court); color:var(--chalk); border-color:var(--court);}
+  .btn-secondary{background:transparent; color:var(--court); border-color:var(--court);}
+  .btn-ghost{background:transparent; color:#63615A; border-color:var(--concrete);}
+  .form-error{color:var(--loss); font-size:0.82rem; min-height:1.1em;}
+
+  .account-bar{
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:14px 18px; background:rgba(199,216,44,0.10); border-radius:6px;
+  }
+  .account-name{font-weight:800;}
+  .token-balance{
+    font-weight:800; font-size:1.2rem; color:var(--court); font-variant-numeric:tabular-nums;
+    margin-left:auto;
+  }
+
+  /* ---- fixtures / bet slip ---- */
+  .fixture-card{
+    border:1px solid var(--concrete-line); border-radius:6px; padding:16px; margin-bottom:12px;
+  }
+  .fixture-title{font-weight:800; margin-bottom:10px;}
+  .fixture-sides{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;}
+  .side-btn{
+    flex:1; min-width:140px; border:1px solid var(--concrete); background:white; border-radius:5px;
+    padding:10px 12px; cursor:pointer; text-align:left;
+  }
+  .side-btn.selected{border-color:var(--accent-dim); background:rgba(199,216,44,0.14);}
+  .side-btn .name{font-weight:700; display:block;}
+  .side-btn .odds{font-size:0.82rem; color:#63615A;}
+  .bet-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .bet-row input[type=number]{width:110px; padding:9px 12px; border:1px solid var(--concrete); border-radius:4px;}
+  .bet-note{font-size:0.82rem; color:#63615A; margin-top:8px;}
+
+  .admin-block{border-top:1px solid var(--concrete-line); padding-top:16px; margin-top:16px;}
+  .admin-block h3{font-size:0.9rem; margin:0 0 10px;}
+  .settle-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:10px 0; border-bottom:1px solid var(--concrete-line);}
+
+  @media (prefers-reduced-motion:no-preference){
+    .board tr td{transition:background 0.15s ease;}
+  }
 </style>
 </head>
 <body>
@@ -196,6 +258,13 @@
   </header>
 
   <div id="dataStatus"></div>
+
+  <nav class="maintabs">
+    <button class="maintab active" data-tab="elo">Elo &amp; leaderboard</button>
+    <button class="maintab" data-tab="betting">Betting</button>
+  </nav>
+
+  <div id="tab-elo" class="tab-panel active">
 
   <nav class="leagues" id="leagueNav" style="display:none;"></nav>
 
@@ -248,6 +317,81 @@
       <div class="loader-files" id="loaderFiles"></div>
     </div>
   </section>
+
+  </div><!-- /tab-elo -->
+
+  <div id="tab-betting" class="tab-panel">
+
+    <section id="authSection">
+      <h2>Account</h2>
+      <div id="authLoggedOut">
+        <div class="auth-forms">
+          <form id="loginForm" class="auth-form">
+            <div class="field"><label>Username</label><input type="text" id="loginUsername" required autocomplete="username"></div>
+            <div class="field"><label>Password</label><input type="password" id="loginPassword" required autocomplete="current-password"></div>
+            <button type="submit" class="btn-primary">Log in</button>
+            <div class="form-error" id="loginError"></div>
+          </form>
+          <form id="signupForm" class="auth-form">
+            <div class="field"><label>Choose a username</label><input type="text" id="signupUsername" required autocomplete="username"></div>
+            <div class="field"><label>Choose a password</label><input type="password" id="signupPassword" required autocomplete="new-password" minlength="6"></div>
+            <button type="submit" class="btn-secondary">Create account</button>
+            <div class="form-error" id="signupError"></div>
+          </form>
+        </div>
+      </div>
+      <div id="authLoggedIn" style="display:none;">
+        <div class="account-bar">
+          <div><span class="account-name" id="accountName"></span> <span class="meta">is playing with</span></div>
+          <div class="token-balance" id="tokenBalance">—</div>
+          <button class="btn-ghost" id="logoutBtn">Log out</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="fixturesSection" style="display:none;">
+      <h2>Open bets <span class="meta" id="fixturesMeta"></span></h2>
+      <div id="fixturesList"></div>
+    </section>
+
+    <section id="myBetsSection" style="display:none;">
+      <h2>Your bets</h2>
+      <table class="board">
+        <thead><tr><th>Matchup</th><th>Pick</th><th>Staked</th><th>Odds</th><th>Result</th></tr></thead>
+        <tbody id="myBetsBody"></tbody>
+      </table>
+    </section>
+
+    <section id="tokenBoardSection" style="display:none;">
+      <h2>Token leaderboard</h2>
+      <table class="board">
+        <thead><tr><th>#</th><th>Player</th><th>Tokens</th></tr></thead>
+        <tbody id="tokenBoardBody"></tbody>
+      </table>
+    </section>
+
+    <section id="adminSection" style="display:none;">
+      <h2>Admin</h2>
+      <div class="admin-block">
+        <h3>Open a new fixture</h3>
+        <div class="predictor">
+          <div class="field"><label>Player A</label><select id="adminPlayerA"></select></div>
+          <div class="vs">vs</div>
+          <div class="field"><label>Player B</label><select id="adminPlayerB"></select></div>
+          <button class="btn-primary" id="createFixtureBtn">Open for betting</button>
+        </div>
+      </div>
+      <div class="admin-block">
+        <h3>Settle a fixture</h3>
+        <div id="adminSettleList"></div>
+      </div>
+    </section>
+
+    <div class="empty" id="bettingSetupNotice" style="display:none;">
+      Betting isn't connected yet — paste your Firebase project config into <code>firebase-config.js</code> to turn this tab on.
+    </div>
+
+  </div><!-- /tab-betting -->
 
   <footer>Elo divisor 400 · K‑factor 25 · recomputed fresh from the match log on every load</footer>
 </div>
@@ -460,11 +604,24 @@ function renderAll(){
     const {history} = computeStandings(matchesRaw, playersRaw, currentLeague);
     renderLog(history);
   };
+  // Hand current standings to the betting module (loaded separately), if present.
+  window.__eloBoard = board;
+  if(typeof window.onEloUpdated === 'function') window.onEloUpdated(board);
 }
+
+/* ---------------- Tab switching ---------------- */
+document.querySelectorAll('.maintab').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.maintab').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  });
+});
 
 function setStatus(msg, isError){
   const el = document.getElementById('dataStatus');
-  el.innerHTML = msg ? `<div class="empty" style="${isError?'color:var(--loss)':''}">${msg}</div>` : '';
+  el.innerHTML = msg ? `<div class="empty" style="${isError?'color:#B5451B':''}">${msg}</div>` : '';
 }
 
 /* ---------------- Data loading: auto-fetch, then manual fallback ---------------- */
@@ -523,6 +680,307 @@ function initLoader(){
     setStatus('Could not auto-load players.csv / matches.csv from this folder — drop them in below.');
   }
 })();
+</script>
+
+<!-- ============================================================
+     BETTING TAB — Firebase Auth + Firestore
+     Requires firebase-config.js in the same folder. See README.
+     ============================================================ -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import {
+  getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc,
+  onSnapshot, query, orderBy, where, getDocs, runTransaction, serverTimestamp, limit
+} from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+let firebaseConfig, ADMIN_UIDS;
+try{
+  ({ firebaseConfig, ADMIN_UIDS } = await import('./firebase-config.js'));
+}catch(e){
+  document.getElementById('bettingSetupNotice').style.display = 'block';
+  document.getElementById('authSection').style.display = 'none';
+}
+
+const STARTING_TOKENS = 1000;
+const EMAIL_DOMAIN = 'handball-elo.local';
+const usernameToEmail = (u) => u.trim().toLowerCase().replace(/[^a-z0-9_.-]/g,'') + '@' + EMAIL_DOMAIN;
+
+if(firebaseConfig){
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  let currentUid = null;
+  let currentUsername = null;
+  let currentTokens = 0;
+  let isAdmin = false;
+  let unsubUserDoc = null;
+
+  /* ---------- signup / login / logout ---------- */
+  document.getElementById('signupForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const username = document.getElementById('signupUsername').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    const errEl = document.getElementById('signupError');
+    errEl.textContent = '';
+    try{
+      const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(username), password);
+      await setDoc(doc(db, 'users', cred.user.uid), {
+        username, tokens: STARTING_TOKENS, createdAt: serverTimestamp()
+      });
+    }catch(err){ errEl.textContent = friendlyAuthError(err); }
+  });
+
+  document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errEl = document.getElementById('loginError');
+    errEl.textContent = '';
+    try{
+      await signInWithEmailAndPassword(auth, usernameToEmail(username), password);
+    }catch(err){ errEl.textContent = friendlyAuthError(err); }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', ()=> signOut(auth));
+
+  function friendlyAuthError(err){
+    const code = err.code || '';
+    if(code.includes('email-already-in-use')) return 'That username is taken.';
+    if(code.includes('wrong-password') || code.includes('invalid-credential')) return 'Wrong username or password.';
+    if(code.includes('user-not-found')) return "That username doesn't exist yet.";
+    if(code.includes('weak-password')) return 'Password needs to be at least 6 characters.';
+    return 'Something went wrong — try again.';
+  }
+
+  /* ---------- auth state ---------- */
+  onAuthStateChanged(auth, (user)=>{
+    if(unsubUserDoc){ unsubUserDoc(); unsubUserDoc = null; }
+    if(user){
+      currentUid = user.uid;
+      document.getElementById('authLoggedOut').style.display = 'none';
+      document.getElementById('authLoggedIn').style.display = 'block';
+      unsubUserDoc = onSnapshot(doc(db,'users',currentUid), (snap)=>{
+        if(!snap.exists()) return;
+        const data = snap.data();
+        currentUsername = data.username;
+        currentTokens = data.tokens;
+        isAdmin = ADMIN_UIDS.includes(currentUid);
+        document.getElementById('accountName').textContent = currentUsername;
+        document.getElementById('tokenBalance').textContent = Math.round(currentTokens) + ' tokens';
+        document.getElementById('adminSection').style.display = isAdmin ? 'block' : 'none';
+        renderFixtures();
+        renderMyBets();
+      });
+      document.getElementById('fixturesSection').style.display = 'block';
+      document.getElementById('myBetsSection').style.display = 'block';
+    } else {
+      currentUid = null; currentUsername = null; currentTokens = 0; isAdmin = false;
+      document.getElementById('authLoggedOut').style.display = 'block';
+      document.getElementById('authLoggedIn').style.display = 'none';
+      document.getElementById('fixturesSection').style.display = 'none';
+      document.getElementById('myBetsSection').style.display = 'none';
+      document.getElementById('adminSection').style.display = 'none';
+    }
+  });
+
+  /* ---------- token leaderboard (public, no login required to view) ---------- */
+  onSnapshot(query(collection(db,'users'), orderBy('tokens','desc'), limit(50)), (snap)=>{
+    const section = document.getElementById('tokenBoardSection');
+    const body = document.getElementById('tokenBoardBody');
+    if(snap.empty){ section.style.display='none'; return; }
+    section.style.display = 'block';
+    body.innerHTML = '';
+    let rank = 1;
+    snap.forEach(d=>{
+      const data = d.data();
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="rank">${rank++}</td><td class="player-name">${escapeHtmlBet(data.username)}</td><td class="elo-val">${Math.round(data.tokens)}</td>`;
+      body.appendChild(tr);
+    });
+  });
+
+  /* ---------- fixtures ---------- */
+  let fixturesCache = [];
+  onSnapshot(query(collection(db,'fixtures'), orderBy('createdAt','desc')), (snap)=>{
+    fixturesCache = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    renderFixtures();
+    renderAdminSettleList();
+  });
+
+  const selectedSide = {}; // fixtureId -> 'a' | 'b'
+
+  function renderFixtures(){
+    const list = document.getElementById('fixturesList');
+    const open = fixturesCache.filter(f=>f.status==='open');
+    document.getElementById('fixturesMeta').textContent = open.length + ' open';
+    if(!currentUid){ list.innerHTML = '<div class="empty">Log in to place bets.</div>'; return; }
+    if(!open.length){ list.innerHTML = '<div class="empty">No open fixtures right now — check back once the admin opens one.</div>'; return; }
+    list.innerHTML = '';
+    open.forEach(f=>{
+      const card = document.createElement('div');
+      card.className = 'fixture-card';
+      const sel = selectedSide[f.id];
+      card.innerHTML = `
+        <div class="fixture-title">${escapeHtmlBet(f.playerA)} vs ${escapeHtmlBet(f.playerB)}</div>
+        <div class="fixture-sides">
+          <button type="button" class="side-btn ${sel==='a'?'selected':''}" data-fx="${f.id}" data-side="a">
+            <span class="name">${escapeHtmlBet(f.playerA)}</span>
+            <span class="odds">${Math.round(f.probA*100)}% · ${f.oddsA.toFixed(2)}x</span>
+          </button>
+          <button type="button" class="side-btn ${sel==='b'?'selected':''}" data-fx="${f.id}" data-side="b">
+            <span class="name">${escapeHtmlBet(f.playerB)}</span>
+            <span class="odds">${Math.round(f.probB*100)}% · ${f.oddsB.toFixed(2)}x</span>
+          </button>
+        </div>
+        <div class="bet-row">
+          <input type="number" min="1" step="1" placeholder="Tokens to bet" id="amount-${f.id}">
+          <button type="button" class="btn-primary" data-place="${f.id}">Place bet</button>
+        </div>
+        <div class="bet-note" id="note-${f.id}"></div>`;
+      list.appendChild(card);
+    });
+    list.querySelectorAll('.side-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        selectedSide[btn.dataset.fx] = btn.dataset.side;
+        renderFixtures();
+      });
+    });
+    list.querySelectorAll('[data-place]').forEach(btn=>{
+      btn.addEventListener('click', ()=> placeBet(btn.dataset.place));
+    });
+  }
+
+  async function placeBet(fixtureId){
+    const note = document.getElementById('note-'+fixtureId);
+    note.textContent = '';
+    const side = selectedSide[fixtureId];
+    if(!side){ note.textContent = 'Pick a side first.'; return; }
+    const amountInput = document.getElementById('amount-'+fixtureId);
+    const amount = Math.floor(Number(amountInput.value));
+    if(!amount || amount <= 0){ note.textContent = 'Enter how many tokens to bet.'; return; }
+    const fixture = fixturesCache.find(f=>f.id===fixtureId);
+    if(!fixture || fixture.status !== 'open'){ note.textContent = 'This fixture is no longer open.'; return; }
+    const pick = side === 'a' ? fixture.playerA : fixture.playerB;
+    const odds = side === 'a' ? fixture.oddsA : fixture.oddsB;
+    const userRef = doc(db,'users',currentUid);
+    try{
+      await runTransaction(db, async (tx)=>{
+        const snap = await tx.get(userRef);
+        const tokens = snap.data().tokens;
+        if(amount > tokens) throw new Error('insufficient');
+        tx.update(userRef, { tokens: tokens - amount });
+        const betRef = doc(collection(db,'bets'));
+        tx.set(betRef, {
+          uid: currentUid, username: currentUsername, fixtureId,
+          matchup: fixture.playerA + ' vs ' + fixture.playerB,
+          pick, amount, odds,
+          potentialPayout: Math.round(amount * odds),
+          status: 'pending', createdAt: serverTimestamp()
+        });
+      });
+      amountInput.value = '';
+      note.textContent = `Bet placed: ${amount} on ${pick}.`;
+    }catch(err){
+      note.textContent = err.message === 'insufficient' ? "You don't have that many tokens." : 'Could not place bet — try again.';
+    }
+  }
+
+  /* ---------- my bets ---------- */
+  function renderMyBets(){
+    if(!currentUid) return;
+    onSnapshot(query(collection(db,'bets'), where('uid','==',currentUid), orderBy('createdAt','desc'), limit(50)), (snap)=>{
+      const body = document.getElementById('myBetsBody');
+      body.innerHTML = '';
+      snap.forEach(d=>{
+        const b = d.data();
+        const resultLabel = b.status === 'pending' ? 'Pending' : b.status === 'won' ? `Won +${b.potentialPayout}` : 'Lost';
+        const cls = b.status === 'won' ? 'status-confirmed' : b.status === 'lost' ? 'status-voided' : '';
+        body.innerHTML += `<tr>
+          <td>${escapeHtmlBet(b.matchup)}</td>
+          <td>${escapeHtmlBet(b.pick)}</td>
+          <td>${b.amount}</td>
+          <td>${b.odds.toFixed(2)}x</td>
+          <td><span class="status-badge ${cls}">${resultLabel}</span></td>
+        </tr>`;
+      });
+    });
+  }
+
+  /* ---------- admin: open a fixture ---------- */
+  window.onEloUpdated = function(board){
+    if(!isAdmin) return;
+    const a = document.getElementById('adminPlayerA');
+    const b = document.getElementById('adminPlayerB');
+    if(!a || a.dataset.filled) { /* still refresh values below */ }
+    const opts = board.map(p=>`<option value="${escapeAttrBet(p.player)}">${escapeHtmlBet(p.player)} (${Math.round(p.elo)})</option>`).join('');
+    a.innerHTML = opts; b.innerHTML = opts;
+    a.dataset.filled = '1';
+  };
+  if(window.__eloBoard) window.onEloUpdated(window.__eloBoard);
+
+  document.getElementById('createFixtureBtn').addEventListener('click', async ()=>{
+    const board = window.__eloBoard || [];
+    const nameA = document.getElementById('adminPlayerA').value;
+    const nameB = document.getElementById('adminPlayerB').value;
+    if(!nameA || !nameB || nameA === nameB) return;
+    const pa = board.find(p=>p.player===nameA);
+    const pb = board.find(p=>p.player===nameB);
+    if(!pa || !pb) return;
+    const probA = window.expectedScore(pa.elo, pb.elo);
+    const probB = 1 - probA;
+    await addDoc(collection(db,'fixtures'), {
+      playerA: nameA, playerB: nameB,
+      probA, probB,
+      oddsA: 1/probA, oddsB: 1/probB,
+      status: 'open', winner: null,
+      createdAt: serverTimestamp()
+    });
+  });
+
+  /* ---------- admin: settle a fixture ---------- */
+  function renderAdminSettleList(){
+    if(!isAdmin) return;
+    const container = document.getElementById('adminSettleList');
+    const open = fixturesCache.filter(f=>f.status==='open');
+    if(!open.length){ container.innerHTML = '<div class="empty">No open fixtures to settle.</div>'; return; }
+    container.innerHTML = open.map(f=>`
+      <div class="settle-row">
+        <span>${escapeHtmlBet(f.playerA)} vs ${escapeHtmlBet(f.playerB)}</span>
+        <button type="button" class="btn-secondary" data-settle="${f.id}" data-winner="${escapeAttrBet(f.playerA)}">${escapeHtmlBet(f.playerA)} won</button>
+        <button type="button" class="btn-secondary" data-settle="${f.id}" data-winner="${escapeAttrBet(f.playerB)}">${escapeHtmlBet(f.playerB)} won</button>
+      </div>`).join('');
+    container.querySelectorAll('[data-settle]').forEach(btn=>{
+      btn.addEventListener('click', ()=> settleFixture(btn.dataset.settle, btn.dataset.winner));
+    });
+  }
+
+  async function settleFixture(fixtureId, winner){
+    if(!confirm(`Settle this fixture as a win for ${winner}? This pays out all pending bets.`)) return;
+    const betsSnap = await getDocs(query(collection(db,'bets'), where('fixtureId','==',fixtureId), where('status','==','pending')));
+    for(const betDoc of betsSnap.docs){
+      const bet = betDoc.data();
+      const won = bet.pick === winner;
+      await runTransaction(db, async (tx)=>{
+        const betRef = doc(db,'bets',betDoc.id);
+        tx.update(betRef, { status: won ? 'won' : 'lost' });
+        if(won){
+          const userRef = doc(db,'users',bet.uid);
+          const uSnap = await tx.get(userRef);
+          tx.update(userRef, { tokens: uSnap.data().tokens + bet.potentialPayout });
+        }
+      });
+    }
+    await updateDoc(doc(db,'fixtures',fixtureId), { status:'settled', winner });
+  }
+
+  function escapeHtmlBet(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function escapeAttrBet(s){ return escapeHtmlBet(s); }
+}
 </script>
 </body>
 </html>
