@@ -589,9 +589,12 @@ try{
   firebaseConfig = configModule.firebaseConfig;
   ADMIN_UIDS = configModule.ADMIN_UIDS;
 }catch(e){
-  console.error("Failed to load firebase-config.js:", e);
-  document.getElementById('bettingSetupNotice').style.display='block';
-  document.getElementById('authSection').style.display='none';
+  // This will now show you the exact reason firebase-config.js failed
+  document.body.innerHTML = `<div style="padding: 40px; color: #ff5555; font-family: monospace;">
+    <h3>Configuration Error:</h3>
+    <p>${e.message}</p>
+    <p>Make sure firebase-config.js is in the same folder and uses "export const".</p>
+  </div>`;
 }
 
 const STARTING_TOKENS = 1000;
