@@ -9,5 +9,5 @@ export const firebaseConfig = {
 };
 
 export const ADMIN_UIDS = [
-  "fFEgf8e6ylZxVqORoGr0K5W2Yme2",
+  "fFEgf8e6ylZxVqORoGr0K5W2Yme2"
 ];
