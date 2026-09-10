@@ -202,6 +202,7 @@ margin-bottom:-2px;
 .side-btn.selected{border-color:var(--accent-dim);background:rgba(199,216,44,0.14);}
 .side-btn .name{font-weight:700;display:block;}
 .side-btn .odds{font-size:0.82rem;color:var(--ink-muted);}
+.side-btn .staked-info{font-size:0.78rem;color:var(--warning);margin-top:2px;font-weight:600;}
 .bet-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
 .bet-row input[type=number]{width:110px;}
 .bet-note{font-size:0.82rem;color:var(--ink-muted);margin-top:8px;}
@@ -350,7 +351,7 @@ margin-bottom:-2px;
       </div>
       <div class="admin-block">
         <h3>Manage Open Fixtures (Settle / Delete &amp; Refund)</h3>
-        <div id="adminSettleList"></div>
+        <div id="adminSettleList"><div class="empty">No open fixtures to manage.</div></div>
       </div>
       <div class="admin-block">
         <h3>Rating Engine Settings</h3>
@@ -473,7 +474,7 @@ function computeStandings(matches, players, leagueFilter){
     elo[b] = eB + K*(scoreB-expB);
     stats[a].games++; stats[b].games++;
     if(w === a){ stats[a].wins++; stats[b].losses++; }
-    else if(w === b){ stats[b].wins++; stats[a].losses++; }
+    else if(w === b){ stats[a].wins++; stats[b].losses++; }
     history.push({ ...m, eloABefore:eA, eloBBefore:eB, eloAAfter:elo[a], eloBAfter:elo[b] });
   });
   
@@ -904,6 +905,7 @@ if(firebaseConfig){
 
         if(isAdmin){
           listenToNameChanges();
+          renderAdminSettleList();
         }
 
         if(isAdmin && window.__eloBoard && typeof window.onEloUpdated === 'function'){
@@ -987,6 +989,14 @@ if(firebaseConfig){
   });
 
   let fixturesCache=[];
+  let allBetsCache=[];
+
+  onSnapshot(query(collection(db,'bets')), snap=>{
+    allBetsCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+    renderFixtures();
+    renderMyBets();
+  });
+
   onSnapshot(query(collection(db,'fixtures'), orderBy('createdAt','desc')), snap=>{
     fixturesCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
     renderFixtures();
@@ -1007,16 +1017,29 @@ if(firebaseConfig){
       const card = document.createElement('div');
       card.className='fixture-card';
       const sel = selectedSide[f.id];
+
+      // Calculate total tokens bet on each player for this fixture
+      let stakedA = 0;
+      let stakedB = 0;
+      allBetsCache.forEach(b => {
+        if(b.fixtureId === f.id && b.status === 'pending'){
+          if(b.pick === f.playerA) stakedA += Number(b.amount) || 0;
+          if(b.pick === f.playerB) stakedB += Number(b.amount) || 0;
+        }
+      });
+
       card.innerHTML = `
         <div class="fixture-title">${escapeHtmlBet(f.playerA)} vs ${escapeHtmlBet(f.playerB)}</div>
         <div class="fixture-sides">
           <button type="button" class="side-btn ${sel==='a'?'selected':''}" data-fx="${f.id}" data-side="a">
             <span class="name">${escapeHtmlBet(f.playerA)}</span>
             <span class="odds">${Math.round(f.probA*100)}% · ${f.oddsA.toFixed(2)}x</span>
+            <span class="staked-info">Total staked: ${stakedA} tokens</span>
           </button>
           <button type="button" class="side-btn ${sel==='b'?'selected':''}" data-fx="${f.id}" data-side="b">
             <span class="name">${escapeHtmlBet(f.playerB)}</span>
             <span class="odds">${Math.round(f.probB*100)}% · ${f.oddsB.toFixed(2)}x</span>
+            <span class="staked-info">Total staked: ${stakedB} tokens</span>
           </button>
         </div>
         <div class="bet-row">
@@ -1076,29 +1099,36 @@ if(firebaseConfig){
   }
 
   function renderMyBets(){
-    if(unsubMyBets){ unsubMyBets(); unsubMyBets=null; }
-    if(!currentUid) return;
-    const betsQuery = query(collection(db,'bets'), where('uid','==',currentUid), orderBy('createdAt','desc'), limit(50));
-    unsubMyBets = onSnapshot(betsQuery, snap=>{
-      const body = document.getElementById('myBetsBody');
-      body.innerHTML='';
-      snap.forEach(d=>{
-        const b=d.data();
-        let resultLabel = 'Pending';
-        let cls = '';
-        if(b.status === 'won'){ resultLabel = `Won +${b.potentialPayout}`; cls = 'status-confirmed'; }
-        else if(b.status === 'lost'){ resultLabel = 'Lost'; cls = 'status-voided'; }
-        else if(b.status === 'refunded'){ resultLabel = 'Refunded'; cls = ''; }
-        body.innerHTML += `
-          <tr>
-            <td>${escapeHtmlBet(b.matchup)}</td>
-            <td>${escapeHtmlBet(b.pick)}</td>
-            <td>${b.amount}</td>
-            <td>${b.odds.toFixed(2)}x</td>
-            <td><span class="status-badge ${cls}">${resultLabel}</span></td>
-          </tr>
-        `;
-      });
+    const body = document.getElementById('myBetsBody');
+    if(!currentUid){ body.innerHTML = ''; return; }
+    const userBets = allBetsCache.filter(b => b.uid === currentUid);
+    userBets.sort((x, y) => {
+      const timeX = x.createdAt?.toMillis ? x.createdAt.toMillis() : 0;
+      const timeY = y.createdAt?.toMillis ? y.createdAt.toMillis() : 0;
+      return timeY - timeX;
+    });
+
+    if(!userBets.length){
+      body.innerHTML = '<tr><td colspan="5" class="empty">You have no bets placed yet.</td></tr>';
+      return;
+    }
+
+    body.innerHTML='';
+    userBets.forEach(b=>{
+      let resultLabel = 'Pending';
+      let cls = '';
+      if(b.status === 'won'){ resultLabel = `Won +${b.potentialPayout}`; cls = 'status-confirmed'; }
+      else if(b.status === 'lost'){ resultLabel = 'Lost'; cls = 'status-voided'; }
+      else if(b.status === 'refunded'){ resultLabel = 'Refunded'; cls = ''; }
+      body.innerHTML += `
+        <tr>
+          <td>${escapeHtmlBet(b.matchup)}</td>
+          <td>${escapeHtmlBet(b.pick)}</td>
+          <td>${b.amount}</td>
+          <td>${b.odds.toFixed(2)}x</td>
+          <td><span class="status-badge ${cls}">${resultLabel}</span></td>
+        </tr>
+      `;
     });
   }
 
