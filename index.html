@@ -106,7 +106,7 @@ font-weight:600;
 .predictor{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;}
 .field{display:flex;flex-direction:column;gap:6px;}
 .field label{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-muted);font-weight:600;}
-select, input[type=number]{
+select, input[type=number], input[type=text]{
 padding:10px 12px;
 border:1px solid var(--concrete-line);
 border-radius:4px;
@@ -133,11 +133,6 @@ border:1px solid var(--concrete-line);
 .log-controls input[type=text]{
 flex:1;
 min-width:180px;
-padding:9px 12px;
-border:1px solid var(--concrete-line);
-border-radius:4px;
-background:var(--court);
-color:var(--ink);
 }
 .status-badge{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:700;padding:3px 8px;border-radius:3px;}
 .status-confirmed{background:rgba(91,168,91,0.15);color:#7AC17A;}
@@ -166,7 +161,6 @@ margin-bottom:-2px;
 .tab-panel.active{display:block;}
 .auth-forms{display:flex;gap:22px;flex-wrap:wrap;}
 .auth-form{flex:1;min-width:220px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--concrete-line);border-radius:6px;padding:16px;}
-.auth-form input{padding:9px 12px;border:1px solid var(--concrete-line);border-radius:4px;background:var(--court);color:var(--ink);}
 .btn-primary,.btn-secondary,.btn-ghost{border-radius:4px;padding:10px 18px;font-size:0.9rem;font-weight:700;cursor:pointer;border:1px solid transparent;}
 .btn-primary{background:var(--accent);color:#121212;border-color:var(--accent);}
 .btn-secondary{background:transparent;color:var(--ink);border-color:var(--concrete-line);}
@@ -188,13 +182,21 @@ margin-bottom:-2px;
 .admin-block{border-top:1px solid var(--concrete-line);padding-top:16px;margin-top:16px;}
 .settle-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--concrete-line);}
 .leaderboard-controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px;}
+.profile-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center;}
+.profile-modal.active{display:flex;}
+.profile-card{background:var(--court);border:1px solid var(--concrete-line);padding:24px;border-radius:6px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px;}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>Handball Elo</h1>
-    <p>Live ratings from every recorded match. Odds update automatically as results come in.</p>
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <h1>Handball Elo</h1>
+        <p>Live ratings from every recorded match. Odds update automatically as results come in.</p>
+      </div>
+      <button class="btn-ghost" id="profileIconBtn" style="display:none; font-size:1.2rem; padding:8px 12px;" title="Profile Settings">👤</button>
+    </div>
   </header>
 
   <div id="dataStatus"></div>
@@ -333,6 +335,21 @@ margin-bottom:-2px;
   <footer id="footerText">Elo divisor 400 · K-factor 25 · recomputed fresh from the match log on every load</footer>
 </div>
 
+<div class="profile-modal" id="profileModal">
+  <div class="profile-card">
+    <h3>Profile Settings</h3>
+    <div class="field">
+      <label>Change Display Username</label>
+      <input type="text" id="newUsernameInput" placeholder="New username">
+    </div>
+    <div class="form-error" id="profileError"></div>
+    <div style="display:flex; gap:10px; justify-content:flex-end;">
+      <button type="button" class="btn-secondary" id="closeProfileModal">Cancel</button>
+      <button type="button" class="btn-primary" id="saveUsernameBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let DIVISOR = 400;
 let K = 25;
@@ -381,6 +398,7 @@ window.expectedScore = function(eloA, eloB){
 function computeStandings(matches, players, leagueFilter){
   const elo = {};
   const stats = {};
+  
   players.forEach(p=>{
     if(!p.player) return;
     elo[p.player] = parseFloat(p.starting_elo) || DEFAULT_ELO;
@@ -417,7 +435,11 @@ function computeStandings(matches, players, leagueFilter){
     else if(w === b){ stats[b].wins++; stats[a].losses++; }
     history.push({ ...m, eloABefore:eA, eloBBefore:eB, eloAAfter:elo[a], eloBAfter:elo[b] });
   });
-  const board = Object.keys(elo).map(name=>({ player:name, elo:elo[name], ...stats[name] })).sort((x,y)=>y.elo-x.elo);
+  
+  let board = Object.keys(elo).map(name=>({ player:name, elo:elo[name], ...stats[name] })).sort((x,y)=>y.elo-x.elo);
+  if(leagueFilter !== 'All'){
+    board = board.filter(p => p.games > 0);
+  }
   return { board, history };
 }
 
@@ -544,6 +566,11 @@ function renderAll(){
   window.__eloBoard = board;
   if(typeof window.onEloUpdated === 'function') window.onEloUpdated(board);
   document.getElementById('footerText').textContent = `Elo divisor ${DIVISOR} · K-factor ${K} · recomputed fresh from the match log on every load`;
+  
+  const divInput = document.getElementById('adminDivisorInput');
+  const kInput = document.getElementById('adminKInput');
+  if(divInput) divInput.value = DIVISOR;
+  if(kInput) kInput.value = K;
 }
 
 document.querySelectorAll('.maintab').forEach(btn=>{
@@ -639,6 +666,16 @@ if(firebaseConfig){
   let unsubUserDoc = null;
   let unsubMyBets = null;
 
+  // Listen to remote engine settings sync
+  onSnapshot(doc(db, 'settings', 'engine'), snap => {
+    if(snap.exists()){
+      const data = snap.data();
+      if(data.divisor) DIVISOR = Number(data.divisor);
+      if(data.k) K = Number(data.k);
+      if(typeof renderAll === 'function') renderAll();
+    }
+  });
+
   document.getElementById('signupForm').addEventListener('submit', async(e)=>{
     e.preventDefault();
     const username = document.getElementById('signupUsername').value.trim();
@@ -675,6 +712,31 @@ if(firebaseConfig){
 
   document.getElementById('logoutBtn').addEventListener('click', ()=>signOut(auth));
 
+  // Profile modal bindings
+  const profileModal = document.getElementById('profileModal');
+  document.getElementById('profileIconBtn').addEventListener('click', ()=>{
+    document.getElementById('newUsernameInput').value = currentUsername || '';
+    document.getElementById('profileError').textContent = '';
+    profileModal.classList.add('active');
+  });
+  document.getElementById('closeProfileModal').addEventListener('click', ()=>profileModal.classList.remove('active'));
+
+  document.getElementById('saveUsernameBtn').addEventListener('click', async()=>{
+    const newName = document.getElementById('newUsernameInput').value.trim();
+    const errEl = document.getElementById('profileError');
+    errEl.textContent = '';
+    if(!newName || newName.length > 30){
+      errEl.textContent = 'Username must be 1 to 30 characters.';
+      return;
+    }
+    try{
+      await updateDoc(doc(db,'users',currentUid), { username: newName });
+      profileModal.classList.remove('active');
+    }catch(err){
+      errEl.textContent = 'Failed to update username.';
+    }
+  });
+
   function friendlyAuthError(err){
     console.error('Firebase error:', err);
     return `${err.code || 'unknown-error'}: ${err.message || 'Something went wrong'}`;
@@ -688,6 +750,7 @@ if(firebaseConfig){
       currentUid = user.uid;
       document.getElementById('authLoggedOut').style.display='none';
       document.getElementById('authLoggedIn').style.display='block';
+      document.getElementById('profileIconBtn').style.display='block';
 
       unsubUserDoc = onSnapshot(doc(db,'users',currentUid), async snap=>{
         if(!snap.exists()){
@@ -706,6 +769,8 @@ if(firebaseConfig){
         currentTokens = data.tokens;
         isAdmin = Array.isArray(ADMIN_UIDS) && ADMIN_UIDS.includes(currentUid);
 
+        document.getElementById('accountName').textContent = currentUsername;
+        document.getElementById('tokenBalance').textContent = Math.round(currentTokens) + ' tokens';
         document.getElementById('adminSection').style.display = isAdmin ? 'block' : 'none';
 
         if(isAdmin && window.__eloBoard && typeof window.onEloUpdated === 'function'){
@@ -721,6 +786,7 @@ if(firebaseConfig){
       currentUid = null; currentUsername = null; currentTokens = 0; isAdmin = false;
       document.getElementById('authLoggedOut').style.display='block';
       document.getElementById('authLoggedIn').style.display='none';
+      document.getElementById('profileIconBtn').style.display='none';
       document.getElementById('fixturesSection').style.display='none';
       document.getElementById('myBetsSection').style.display='none';
       document.getElementById('adminSection').style.display='none';
@@ -883,16 +949,18 @@ if(firebaseConfig){
     });
   });
 
-  document.getElementById('updateEngineBtn').addEventListener('click', ()=>{
+  document.getElementById('updateEngineBtn').addEventListener('click', async()=>{
     const newDivisor = Number(document.getElementById('adminDivisorInput').value);
     const newK = Number(document.getElementById('adminKInput').value);
     if(!newDivisor || !newK) return;
 
-    if(confirm('Are you sure you want to update the Elo rating engine divisor and K-factor? This will recompute all standings.')){
-      DIVISOR = newDivisor;
-      K = newK;
-      renderAll();
-      alert('Engine parameters updated successfully!');
+    if(confirm('Are you sure you want to update the Elo rating engine divisor and K-factor? This will update settings for everyone.')){
+      try {
+        await setDoc(doc(db, 'settings', 'engine'), { divisor: newDivisor, k: newK });
+        alert('Engine parameters updated and saved to Firebase!');
+      } catch (err) {
+        alert('Failed to save engine parameters.');
+      }
     }
   });
 
