@@ -386,6 +386,16 @@ margin-bottom:-2px;
 
   <div id="tab-profile" class="tab-panel">
     <section>
+      <h2>Your account</h2>
+      <p style="margin:0 0 16px;">You're currently playing as <span class="account-name" id="profileCurrentUsername">—</span>.</p>
+      <div class="account-bar" style="justify-content:space-around; text-align:center;">
+        <div><div class="elo-val" id="statsWins">0</div><div class="meta">Won</div></div>
+        <div><div class="elo-val" id="statsLosses">0</div><div class="meta">Lost</div></div>
+        <div><div class="elo-val" id="statsPct">—</div><div class="meta">Win rate</div></div>
+      </div>
+    </section>
+
+    <section>
       <h2>Profile &amp; Settings</h2>
       <div class="form-warning">⚠️ Warning: You can only change your username a maximum of 2 times ever. Choose carefully!</div>
       <div class="field" style="max-width:300px; margin-bottom:14px;">
@@ -937,6 +947,7 @@ if(firebaseConfig){
         }
         renderFixtures();
         renderMyBets();
+        renderProfileStats();
       });
 
       document.getElementById('fixturesSection').style.display='block';
@@ -950,6 +961,7 @@ if(firebaseConfig){
       document.getElementById('myBetsSection').style.display='none';
       document.getElementById('adminSection').style.display='none';
       document.getElementById('adminNameChangesSection').style.display='none';
+      renderProfileStats();
     }
   });
 
@@ -1019,6 +1031,7 @@ if(firebaseConfig){
     allBetsCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
     renderFixtures();
     renderMyBets();
+    renderProfileStats();
   });
 
   onSnapshot(collection(db,'fixtures'), snap=>{
@@ -1125,6 +1138,28 @@ if(firebaseConfig){
     }catch(err){
       note.textContent = err.message==='insufficient' ? "You don't have that many tokens." : 'Could not place bet — try again.';
     }
+  }
+
+  function renderProfileStats(){
+    const nameEl = document.getElementById('profileCurrentUsername');
+    const winsEl = document.getElementById('statsWins');
+    const lossesEl = document.getElementById('statsLosses');
+    const pctEl = document.getElementById('statsPct');
+    if(!currentUid){
+      nameEl.textContent = '—';
+      winsEl.textContent = '0';
+      lossesEl.textContent = '0';
+      pctEl.textContent = '—';
+      return;
+    }
+    nameEl.textContent = currentUsername || '—';
+    const userBets = allBetsCache.filter(b => b.uid === currentUid);
+    const wins = userBets.filter(b => b.status === 'won').length;
+    const losses = userBets.filter(b => b.status === 'lost').length;
+    const decided = wins + losses;
+    winsEl.textContent = wins;
+    lossesEl.textContent = losses;
+    pctEl.textContent = decided ? Math.round(100 * wins / decided) + '%' : '—';
   }
 
   function renderMyBets(){
