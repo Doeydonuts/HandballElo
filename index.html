@@ -6,15 +6,16 @@
 <title>Handball Elo</title>
 <style>
   :root{
-    --chalk:#F5F3EE;
-    --court:#1B3A4B;
-    --court-dim:#2C5164;
-    --concrete:#B9B6AE;
-    --concrete-line:#DAD7CF;
+    --chalk:#121212;
+    --court:#1E1E1E;
+    --court-dim:#2A2A2A;
+    --concrete:#2D2D2D;
+    --concrete-line:#383838;
     --accent:#C7D82C;
     --accent-dim:#9CAA1E;
-    --loss:#B5451B;
-    --ink:#1B1A17;
+    --loss:#D96B43;
+    --ink:#E0E0E0;
+    --ink-muted:#9E9E9E;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -31,7 +32,8 @@
     position:relative;
     padding:36px 28px 30px;
     background:var(--court);
-    color:var(--chalk);
+    color:var(--ink);
+    border:1px solid var(--concrete-line);
     border-radius:6px;
     margin-bottom:26px;
     overflow:hidden;
@@ -39,14 +41,14 @@
   header::before{
     content:"";
     position:absolute; inset:10px;
-    border:2px solid rgba(245,243,238,0.22);
+    border:1px solid rgba(224,224,224,0.12);
     border-radius:2px;
     pointer-events:none;
   }
   header::after{
     content:"";
-    position:absolute; left:50%; top:10px; bottom:10px; width:2px;
-    background:rgba(245,243,238,0.22);
+    position:absolute; left:50%; top:10px; bottom:10px; width:1px;
+    background:rgba(224,224,224,0.12);
   }
   header h1{
     margin:0 0 4px;
@@ -55,26 +57,30 @@
     letter-spacing:-0.01em;
     font-variant-numeric:tabular-nums;
   }
-  header p{margin:0; color:var(--concrete-line); font-size:0.95rem; max-width:50ch;}
+  header p{margin:0; color:var(--ink-muted); font-size:0.95rem; max-width:50ch;}
 
   nav.leagues{
     display:flex; gap:8px; flex-wrap:wrap;
     margin-bottom:22px;
   }
   nav.leagues button{
-    border:1px solid var(--concrete);
-    background:transparent;
+    border:1px solid var(--concrete-line);
+    background:var(--court);
     color:var(--ink);
     padding:8px 16px;
     border-radius:999px;
     font-size:0.9rem;
     cursor:pointer;
     font-weight:600;
+    transition:all 0.15s ease;
+  }
+  nav.leagues button:hover{
+    border-color:var(--accent-dim);
   }
   nav.leagues button.active{
-    background:var(--court);
-    border-color:var(--court);
-    color:var(--chalk);
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#121212;
   }
 
   section{margin-bottom:34px;}
@@ -83,11 +89,11 @@
     text-transform:none;
     margin:0 0 12px;
     padding-bottom:8px;
-    border-bottom:2px solid var(--ink);
+    border-bottom:1px solid var(--concrete-line);
     display:flex; justify-content:space-between; align-items:baseline;
     gap:12px;
   }
-  h2 .meta{font-weight:500; font-size:0.82rem; color:#63615A;}
+  h2 .meta{font-weight:500; font-size:0.82rem; color:var(--ink-muted);}
 
   /* ---- leaderboard, scoreboard styling ---- */
   table{width:100%; border-collapse:collapse;}
@@ -101,19 +107,19 @@
     font-size:0.72rem;
     text-transform:uppercase;
     letter-spacing:0.06em;
-    color:#63615A;
+    color:var(--ink-muted);
     font-weight:600;
-    border-bottom:2px solid var(--ink);
+    border-bottom:1px solid var(--concrete-line);
   }
-  .board tr:hover td{background:rgba(199,216,44,0.10);}
-  .rank{font-weight:800; width:2.2em; color:#63615A;}
-  .rank.top1{color:var(--accent-dim);}
+  .board tr:hover td{background:rgba(199,216,44,0.05);}
+  .rank{font-weight:800; width:2.2em; color:var(--ink-muted);}
+  .rank.top1{color:var(--accent);}
   .player-name{font-weight:700;}
   .elo-val{font-weight:800; font-size:1.05rem;}
-  .delta-up{color:#3E7A3E;}
+  .delta-up{color:#5BA85B;}
   .delta-down{color:var(--loss);}
   .winpct-bar{
-    height:6px; background:var(--concrete-line); border-radius:3px; overflow:hidden; min-width:60px;
+    height:6px; background:var(--concrete); border-radius:3px; overflow:hidden; min-width:60px;
   }
   .winpct-bar div{height:100%; background:var(--accent-dim);}
 
@@ -122,54 +128,56 @@
     display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;
   }
   .field{display:flex; flex-direction:column; gap:6px;}
-  .field label{font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:#63615A; font-weight:600;}
+  .field label{font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-muted); font-weight:600;}
   select{
-    padding:10px 12px; border:1px solid var(--concrete); border-radius:4px;
-    font-size:0.95rem; background:white; min-width:180px;
+    padding:10px 12px; border:1px solid var(--concrete-line); border-radius:4px;
+    font-size:0.95rem; background:var(--court); color:var(--ink); min-width:180px;
   }
-  .vs{font-weight:800; font-size:1.1rem; color:#63615A; padding-bottom:10px;}
+  .vs{font-weight:800; font-size:1.1rem; color:var(--ink-muted); padding-bottom:10px;}
   .predict-result{
     margin-top:18px;
     display:flex; gap:0; border-radius:4px; overflow:hidden; height:44px;
-    border:1px solid var(--ink);
+    border:1px solid var(--concrete-line);
   }
   .predict-result .seg{
     display:flex; align-items:center; justify-content:center;
-    font-weight:800; color:white; font-size:0.95rem;
+    font-weight:800; color:#121212; font-size:0.95rem;
   }
-  .predict-result .seg.a{background:var(--court);}
-  .predict-result .seg.b{background:var(--loss);}
-  .predict-names{display:flex; justify-content:space-between; margin-top:6px; font-size:0.85rem; color:#63615A;}
+  .predict-result .seg.a{background:var(--accent); color:#121212;}
+  .predict-result .seg.b{background:var(--loss); color:#121212;}
+  .predict-names{display:flex; justify-content:space-between; margin-top:6px; font-size:0.85rem; color:var(--ink-muted);}
 
   /* ---- log ---- */
   .log-controls{display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;}
   .log-controls input[type=text]{
-    flex:1; min-width:180px; padding:9px 12px; border:1px solid var(--concrete); border-radius:4px; font-size:0.9rem;
+    flex:1; min-width:180px; padding:9px 12px; border:1px solid var(--concrete-line); border-radius:4px; font-size:0.9rem; background:var(--court); color:var(--ink);
   }
+  .log-controls input[type=text]::placeholder{color:var(--ink-muted);}
   .status-badge{
     font-size:0.7rem; text-transform:uppercase; letter-spacing:0.04em; font-weight:700;
     padding:3px 8px; border-radius:3px;
   }
-  .status-confirmed{background:rgba(62,122,62,0.14); color:#3E7A3E;}
-  .status-voided{background:rgba(181,69,27,0.12); color:var(--loss); text-decoration:line-through; text-decoration-color:rgba(181,69,27,0.5);}
+  .status-confirmed{background:rgba(91,168,91,0.15); color:#7AC17A;}
+  .status-voided{background:rgba(217,107,67,0.15); color:var(--loss); text-decoration:line-through; text-decoration-color:rgba(217,107,67,0.5);}
 
   /* ---- data loader ---- */
   .loader{
-    border:1px dashed var(--concrete);
+    border:1px dashed var(--concrete-line);
     border-radius:6px;
     padding:22px;
     text-align:center;
-    color:#63615A;
+    color:var(--ink-muted);
     font-size:0.9rem;
+    background:var(--court);
   }
-  .loader.dragover{border-color:var(--accent-dim); background:rgba(199,216,44,0.08);}
+  .loader.dragover{border-color:var(--accent); background:rgba(199,216,44,0.05);}
   .loader input{display:none;}
-  .loader .browse{color:var(--court); font-weight:700; cursor:pointer; text-decoration:underline;}
+  .loader .browse{color:var(--accent); font-weight:700; cursor:pointer; text-decoration:underline;}
   .loader-files{margin-top:10px; font-size:0.8rem;}
   .loader-files span{margin-right:14px;}
 
-  .empty{color:#63615A; font-size:0.9rem; padding:20px 0;}
-  footer{color:#8a877d; font-size:0.78rem; text-align:center; margin-top:40px;}
+  .empty{color:var(--ink-muted); font-size:0.9rem; padding:20px 0;}
+  footer{color:var(--ink-muted); font-size:0.78rem; text-align:center; margin-top:40px;}
 
   @media (prefers-reduced-motion:no-preference){
     .board tr td{transition:background 0.15s ease;}
@@ -453,7 +461,7 @@ function renderAll(){
 
 function setStatus(msg, isError){
   const el = document.getElementById('dataStatus');
-  el.innerHTML = msg ? `<div class="empty" style="${isError?'color:#B5451B':''}">${msg}</div>` : '';
+  el.innerHTML = msg ? `<div class="empty" style="${isError?'color:var(--loss)':''}">${msg}</div>` : '';
 }
 
 /* ---------------- Data loading: auto-fetch, then manual fallback ---------------- */
