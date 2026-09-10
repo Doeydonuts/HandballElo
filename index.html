@@ -415,6 +415,12 @@ margin-bottom:-2px;
           <div class="field"><label>K-Factor</label><input type="number" id="adminKInput" value="25"></div>
           <button class="btn-secondary" id="updateEngineBtn">Apply Engine Changes</button>
         </div>
+        <div class="bet-note">Saved to Firestore — updates the leaderboard for everyone live.</div>
+      </div>
+      <div class="admin-block">
+        <h3>Danger Zone</h3>
+        <p class="bet-note" style="margin-top:0;">Permanently deletes every player and match record — useful while testing with fake data. This does not touch accounts, tokens, or bets.</p>
+        <button class="btn-danger" id="resetEloDataBtn">Delete ALL player &amp; match data</button>
       </div>
     </section>
 
@@ -874,7 +880,8 @@ if(firebaseConfig){
         player_a: data.player_a,
         player_b: data.player_b,
         winner: data.winner,
-        status: data.status || 'confirmed'
+        status: data.status || 'confirmed',
+        fixtureId: data.fixtureId || null
       };
     });
     if(typeof window.setEloLoadingStatus === 'function') window.setEloLoadingStatus('');
@@ -1509,7 +1516,11 @@ if(firebaseConfig){
     body.innerHTML = rows.map(m=>{
       if(editingMatchId === m.id){
         const winnerOpts = [m.player_a, m.player_b].map(n=>`<option value="${escapeAttrBet(n)}" ${n===m.winner?'selected':''}>${escapeHtmlBet(n)}</option>`).join('');
+        const betWarning = m.fixtureId
+          ? `<tr><td colspan="6"><div class="bet-note" style="color:var(--warning);">This match came from a settled bet. Changing the winner below will also reverse and re-pay the affected bets' token balances.</div></td></tr>`
+          : '';
         return `
+          ${betWarning}
           <tr>
             <td><input type="date" value="${m.date||''}" data-edit-date="${m.id}" style="width:140px;"></td>
             <td><input type="text" value="${escapeAttrBet(m.league||'')}" data-edit-league="${m.id}" style="width:110px;"></td>
@@ -1522,7 +1533,7 @@ if(firebaseConfig){
               </select>
             </td>
             <td style="display:flex; gap:6px;">
-              <button type="button" class="btn-primary" data-save-match="${m.id}">Save</button>
+              <button type="button" class="btn-primary" data-save-match="${m.id}" data-fixture-id="${m.fixtureId||''}" data-old-winner="${escapeAttrBet(m.winner||'')}">Save</button>
               <button type="button" class="btn-ghost" data-cancel-edit="${m.id}">Cancel</button>
             </td>
           </tr>
@@ -1561,18 +1572,55 @@ if(firebaseConfig){
     body.querySelectorAll('[data-save-match]').forEach(btn=>{
       btn.addEventListener('click', async()=>{
         const id = btn.dataset.saveMatch;
+        const fixtureId = btn.dataset.fixtureId;
+        const oldWinner = btn.dataset.oldWinner;
         const date = body.querySelector(`[data-edit-date="${id}"]`).value;
         const league = body.querySelector(`[data-edit-league="${id}"]`).value.trim();
         const winner = body.querySelector(`[data-edit-winner="${id}"]`).value;
         const status = body.querySelector(`[data-edit-status="${id}"]`).value;
         try{
           await updateDoc(doc(db,'matches',id), { date, league, winner, status });
+          if(fixtureId && winner !== oldWinner){
+            await resettleFixtureBets(fixtureId, winner);
+          }
           editingMatchId = null;
         }catch(err){ alert('Failed to save match.'); }
       });
     });
   }
   document.getElementById('adminMatchSearch').oninput = renderAdminMatches;
+
+  // Reverses previously-paid bets for a fixture and re-pays them against a
+  // corrected winner. Only touches bets already marked won/lost (i.e. the
+  // fixture was already settled) — pending/refunded bets are left alone.
+  async function resettleFixtureBets(fixtureId, newWinner){
+    const betsSnap = await getDocs(query(
+      collection(db,'bets'),
+      where('fixtureId','==',fixtureId),
+      where('status','in',['won','lost'])
+    ));
+    for(const betDoc of betsSnap.docs){
+      const bet = betDoc.data();
+      const wasWon = bet.status === 'won';
+      const willWin = bet.pick === newWinner;
+      if(wasWon === willWin) continue; // no change needed for this bet
+      try{
+        await runTransaction(db, async tx=>{
+          const betRef = doc(db,'bets',betDoc.id);
+          const userRef = doc(db,'users',bet.uid);
+          const uSnap = await tx.get(userRef); // read before any writes
+          if(!uSnap.exists()) throw new Error('user-not-found');
+          let tokens = uSnap.data().tokens;
+          if(wasWon) tokens -= bet.potentialPayout; // claw back the old payout
+          if(willWin) tokens += bet.potentialPayout; // pay the corrected winner
+          tx.update(userRef, { tokens });
+          tx.update(betRef, { status: willWin ? 'won' : 'lost' });
+        });
+      }catch(err){
+        console.error('Failed to resettle bet', betDoc.id, err);
+      }
+    }
+  }
 
   document.getElementById('updateEngineBtn').addEventListener('click', async()=>{
     const newDivisor = Number(document.getElementById('adminDivisorInput').value);
@@ -1586,6 +1634,24 @@ if(firebaseConfig){
       } catch (err) {
         alert('Failed to save engine parameters.');
       }
+    }
+  });
+
+  document.getElementById('resetEloDataBtn').addEventListener('click', async()=>{
+    if(!confirm('This permanently deletes ALL players and ALL matches. This cannot be undone. Continue?')) return;
+    if(!confirm('Really sure? Type OK to confirm one more time — everyone\'s Elo history will be wiped.')) return;
+    try{
+      const [playersSnap, matchesSnap] = await Promise.all([
+        getDocs(collection(db,'players')),
+        getDocs(collection(db,'matches'))
+      ]);
+      const deletes = [];
+      playersSnap.forEach(d=>deletes.push(deleteDoc(doc(db,'players',d.id))));
+      matchesSnap.forEach(d=>deletes.push(deleteDoc(doc(db,'matches',d.id))));
+      await Promise.all(deletes);
+      alert(`Deleted ${playersSnap.size} players and ${matchesSnap.size} matches.`);
+    }catch(err){
+      alert('Failed to reset data: ' + (err.message || err));
     }
   });
 
