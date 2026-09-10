@@ -8,7 +8,7 @@ export const firebaseConfig = {
   measurementId: "G-VVND9LRD4Q"
 };
 
-export const ADMIN_UIDS = {
+export const ADMIN_UIDS = [
   "fFEgf8e6ylZxVqORoGr0K5W2Yme2",
   "YkbsW3f1cmSd5DopijW7r1AicXv2"
-};
+];
