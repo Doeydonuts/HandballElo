@@ -413,6 +413,15 @@ margin-bottom:-2px;
         <tbody id="adminNameChangesBody"></tbody>
       </table>
     </section>
+
+    <section id="adminAllUsersSection" style="display:none;">
+      <h2>Admin: All Signups <span class="meta" id="adminUsersMeta"></span></h2>
+      <div class="log-controls"><input type="text" id="adminUsersSearch" placeholder="Search email or username…"></div>
+      <table class="board">
+        <thead><tr><th>Signed up</th><th>Username</th><th>Email</th><th>Tokens</th><th>UID</th></tr></thead>
+        <tbody id="adminUsersBody"></tbody>
+      </table>
+    </section>
   </div>
 
   <footer id="footerText">Elo divisor 400 · K-factor 25 · recomputed fresh from the match log on every load</footer>
@@ -780,6 +789,8 @@ if(firebaseConfig){
   let unsubUserDoc = null;
   let unsubMyBets = null;
   let unsubNameChanges = null;
+  let unsubAllUsers = null;
+  let allUsersCache = [];
 
   onSnapshot(doc(db, 'settings', 'engine'), snap => {
     if(snap.exists()){
@@ -901,6 +912,7 @@ if(firebaseConfig){
     if(unsubUserDoc){ unsubUserDoc(); unsubUserDoc=null; }
     if(unsubMyBets){ unsubMyBets(); unsubMyBets=null; }
     if(unsubNameChanges){ unsubNameChanges(); unsubNameChanges=null; }
+    if(unsubAllUsers){ unsubAllUsers(); unsubAllUsers=null; }
 
     if(user){
       currentUid = user.uid;
@@ -936,9 +948,11 @@ if(firebaseConfig){
         document.getElementById('tokenBalance').textContent = Math.round(currentTokens) + ' tokens';
         document.getElementById('adminSection').style.display = isAdmin ? 'block' : 'none';
         document.getElementById('adminNameChangesSection').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('adminAllUsersSection').style.display = isAdmin ? 'block' : 'none';
 
         if(isAdmin){
           listenToNameChanges();
+          listenToAllUsers();
           renderAdminSettleList();
         }
 
@@ -961,9 +975,44 @@ if(firebaseConfig){
       document.getElementById('myBetsSection').style.display='none';
       document.getElementById('adminSection').style.display='none';
       document.getElementById('adminNameChangesSection').style.display='none';
+      document.getElementById('adminAllUsersSection').style.display='none';
       renderProfileStats();
     }
   });
+
+  function listenToAllUsers(){
+    if(unsubAllUsers) return;
+    unsubAllUsers = onSnapshot(query(collection(db,'users'), orderBy('createdAt','desc')), snap=>{
+      allUsersCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+      renderAdminAllUsers();
+    });
+  }
+
+  function renderAdminAllUsers(){
+    if(!isAdmin) return;
+    const body = document.getElementById('adminUsersBody');
+    const meta = document.getElementById('adminUsersMeta');
+    const searchTerm = (document.getElementById('adminUsersSearch').value || '').toLowerCase();
+    const rows = allUsersCache.filter(u=>{
+      if(!searchTerm) return true;
+      return (u.username||'').toLowerCase().includes(searchTerm) || (u.email||'').toLowerCase().includes(searchTerm);
+    });
+    meta.textContent = `${rows.length} of ${allUsersCache.length} accounts`;
+    if(!rows.length){ body.innerHTML = '<tr><td colspan="5" class="empty">No accounts found.</td></tr>'; return; }
+    body.innerHTML = rows.map(u=>{
+      const dateStr = u.createdAt?.toDate ? u.createdAt.toDate().toLocaleString() : '—';
+      return `
+        <tr>
+          <td>${dateStr}</td>
+          <td>${escapeHtmlBet(u.username||'—')}</td>
+          <td>${escapeHtmlBet(u.email||'—')}</td>
+          <td>${Math.round(u.tokens||0)}</td>
+          <td><code>${u.id.substring(0,8)}...</code></td>
+        </tr>
+      `;
+    }).join('');
+  }
+  document.getElementById('adminUsersSearch').oninput = renderAdminAllUsers;
 
   function listenToNameChanges(){
     if(unsubNameChanges) return;
