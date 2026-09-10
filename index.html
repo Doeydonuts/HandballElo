@@ -14,6 +14,7 @@
 --accent:#1eaa3a;
 --accent-dim:#1eaa3a;
 --loss:#aa2c1e;
+--warning:#d4af37;
 --ink:#E0E0E0;
 --ink-muted:#9E9E9E;
 }
@@ -144,7 +145,8 @@ min-width:180px;
 .loader-files{margin-top:10px;font-size:0.8rem;}
 .empty{color:var(--ink-muted);font-size:0.9rem;padding:20px 0;}
 footer{color:var(--ink-muted);font-size:0.78rem;text-align:center;margin-top:40px;}
-nav.maintabs{display:flex;gap:4px;margin-bottom:24px;border-bottom:2px solid var(--ink);}
+nav.maintabs{display:flex;gap:4px;margin-bottom:24px;border-bottom:2px solid var(--ink);justify-content:space-between;align-items:flex-end;}
+.maintabs-left{display:flex;gap:4px;}
 .maintab{
 border:none;
 background:transparent;
@@ -157,15 +159,15 @@ border-bottom:3px solid transparent;
 margin-bottom:-2px;
 }
 .maintab.active{color:var(--ink);border-bottom-color:var(--accent-dim);}
-.tab-panel{display:none;}
-.tab-panel.active{display:block;}
 .auth-forms{display:flex;gap:22px;flex-wrap:wrap;}
 .auth-form{flex:1;min-width:220px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--concrete-line);border-radius:6px;padding:16px;}
-.btn-primary,.btn-secondary,.btn-ghost{border-radius:4px;padding:10px 18px;font-size:0.9rem;font-weight:700;cursor:pointer;border:1px solid transparent;}
+.btn-primary,.btn-secondary,.btn-ghost,.btn-danger{border-radius:4px;padding:10px 18px;font-size:0.9rem;font-weight:700;cursor:pointer;border:1px solid transparent;}
 .btn-primary{background:var(--accent);color:#121212;border-color:var(--accent);}
 .btn-secondary{background:transparent;color:var(--ink);border-color:var(--concrete-line);}
 .btn-ghost{background:transparent;color:var(--ink-muted);border-color:var(--concrete-line);}
+.btn-danger{background:transparent;color:var(--loss);border-color:var(--loss);}
 .form-error{color:var(--loss);font-size:0.82rem;min-height:1.1em;}
+.form-warning{color:var(--warning);font-size:0.85rem;font-weight:600;background:rgba(212,175,55,0.1);padding:10px;border-radius:4px;border-left:3px solid var(--warning);margin-bottom:10px;}
 .account-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 18px;background:rgba(199,216,44,0.10);border-radius:6px;}
 .account-name{font-weight:800;}
 .token-balance{font-weight:800;font-size:1.2rem;color:var(--ink);margin-left:auto;}
@@ -182,9 +184,8 @@ margin-bottom:-2px;
 .admin-block{border-top:1px solid var(--concrete-line);padding-top:16px;margin-top:16px;}
 .settle-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--concrete-line);}
 .leaderboard-controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px;}
-.profile-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:100;align-items:center;justify-content:center;}
-.profile-modal.active{display:flex;}
-.profile-card{background:var(--court);border:1px solid var(--concrete-line);padding:24px;border-radius:6px;width:100%;max-width:380px;display:flex;flex-direction:column;gap:14px;}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
 </style>
 </head>
 <body>
@@ -195,15 +196,17 @@ margin-bottom:-2px;
         <h1>Handball Elo</h1>
         <p>Live ratings from every recorded match. Odds update automatically as results come in.</p>
       </div>
-      <button class="btn-ghost" id="profileIconBtn" style="display:none; font-size:1.2rem; padding:8px 12px;" title="Profile Settings">👤</button>
     </div>
   </header>
 
   <div id="dataStatus"></div>
 
   <nav class="maintabs">
-    <button class="maintab active" data-tab="elo">Elo &amp; leaderboard</button>
-    <button class="maintab" data-tab="betting">Betting</button>
+    <div class="maintabs-left">
+      <button class="maintab active" data-tab="elo">Elo &amp; leaderboard</button>
+      <button class="maintab" data-tab="betting">Betting</button>
+    </div>
+    <button class="maintab" data-tab="profile" id="profileTabBtn" style="display:none;">Profile</button>
   </nav>
 
   <div id="tab-elo" class="tab-panel active">
@@ -259,14 +262,14 @@ margin-bottom:-2px;
       <div id="authLoggedOut">
         <div class="auth-forms">
           <form id="loginForm" class="auth-form">
-            <div class="field"><label>Username</label><input type="text" id="loginUsername" required autocomplete="username"></div>
+            <div class="field"><label>Email / Username</label><input type="text" id="loginUsername" required autocomplete="username"></div>
             <div class="field"><label>Password</label><input type="password" id="loginPassword" required autocomplete="current-password"></div>
             <button type="submit" class="btn-primary">Log in</button>
             <div class="form-error" id="loginError"></div>
           </form>
           <form id="signupForm" class="auth-form">
-            <div class="field"><label>Choose a username</label><input type="text" id="signupUsername" required autocomplete="username"></div>
-            <div class="field"><label>Choose a password</label><input type="password" id="signupPassword" required autocomplete="new-password" minlength="6"></div>
+            <div class="field"><label>Email Address</label><input type="email" id="signupEmail" required autocomplete="email"></div>
+            <div class="field"><label>Password</label><input type="password" id="signupPassword" required autocomplete="new-password" minlength="6"></div>
             <button type="submit" class="btn-secondary">Create account</button>
             <div class="form-error" id="signupError"></div>
           </form>
@@ -314,7 +317,7 @@ margin-bottom:-2px;
         </div>
       </div>
       <div class="admin-block">
-        <h3>Settle a fixture</h3>
+        <h3>Manage Open Fixtures (Settle / Delete &amp; Refund)</h3>
         <div id="adminSettleList"></div>
       </div>
       <div class="admin-block">
@@ -332,22 +335,28 @@ margin-bottom:-2px;
     </div>
   </div>
 
-  <footer id="footerText">Elo divisor 400 · K-factor 25 · recomputed fresh from the match log on every load</footer>
-</div>
+  <div id="tab-profile" class="tab-panel">
+    <section>
+      <h2>Profile &amp; Settings</h2>
+      <div class="form-warning">⚠️ Warning: You can only change your username a maximum of 2 times ever. Choose carefully!</div>
+      <div class="field" style="max-width:300px; margin-bottom:14px;">
+        <label>Change Display Username</label>
+        <input type="text" id="newUsernameInput" placeholder="New username">
+      </div>
+      <button type="button" class="btn-primary" id="saveUsernameBtn">Update Username</button>
+      <div class="form-error" id="profileError" style="margin-top:8px;"></div>
+    </section>
 
-<div class="profile-modal" id="profileModal">
-  <div class="profile-card">
-    <h3>Profile Settings</h3>
-    <div class="field">
-      <label>Change Display Username</label>
-      <input type="text" id="newUsernameInput" placeholder="New username">
-    </div>
-    <div class="form-error" id="profileError"></div>
-    <div style="display:flex; gap:10px; justify-content:flex-end;">
-      <button type="button" class="btn-secondary" id="closeProfileModal">Cancel</button>
-      <button type="button" class="btn-primary" id="saveUsernameBtn">Save</button>
-    </div>
+    <section id="adminNameChangesSection" style="display:none;">
+      <h2>Admin: Username Change History</h2>
+      <table class="board">
+        <thead><tr><th>Time</th><th>User UID</th><th>Old Name</th><th>New Name</th><th>Action</th></tr></thead>
+        <tbody id="adminNameChangesBody"></tbody>
+      </table>
+    </section>
   </div>
+
+  <footer id="footerText">Elo divisor 400 · K-factor 25 · recomputed fresh from the match log on every load</footer>
 </div>
 
 <script>
@@ -635,7 +644,7 @@ function initLoader(){
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, onSnapshot, query, orderBy, where, getDocs, runTransaction, serverTimestamp, limit } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, deleteDoc, onSnapshot, query, orderBy, where, getDocs, runTransaction, serverTimestamp, limit } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 let firebaseConfig;
 let ADMIN_UIDS;
@@ -651,8 +660,6 @@ try{
 }
 
 const STARTING_TOKENS = 1000;
-const EMAIL_DOMAIN = 'handball-elo.local';
-const usernameToEmail = (u)=> u.trim().toLowerCase().replace(/[^a-z0-9_.-]/g,'') + '@' + EMAIL_DOMAIN;
 
 if(firebaseConfig){
   const app = initializeApp(firebaseConfig);
@@ -662,11 +669,12 @@ if(firebaseConfig){
   let currentUid = null;
   let currentUsername = null;
   let currentTokens = 0;
+  let changeCount = 0;
   let isAdmin = false;
   let unsubUserDoc = null;
   let unsubMyBets = null;
+  let unsubNameChanges = null;
 
-  // Listen to remote engine settings sync
   onSnapshot(doc(db, 'settings', 'engine'), snap => {
     if(snap.exists()){
       const data = snap.data();
@@ -678,19 +686,20 @@ if(firebaseConfig){
 
   document.getElementById('signupForm').addEventListener('submit', async(e)=>{
     e.preventDefault();
-    const username = document.getElementById('signupUsername').value.trim();
+    const email = document.getElementById('signupEmail').value.trim();
     const password = document.getElementById('signupPassword').value;
     const errEl = document.getElementById('signupError');
     errEl.textContent='';
 
-    if (username.length < 1 || username.length > 30) {
-      errEl.textContent = 'Username must be between 1 and 30 characters.';
-      return;
-    }
-
     try{
-      const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(username), password);
-      await setDoc(doc(db,'users',cred.user.uid), { username, tokens: STARTING_TOKENS, createdAt: serverTimestamp() });
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await setDoc(doc(db,'users',cred.user.uid), { 
+        username: email, 
+        email: email,
+        tokens: STARTING_TOKENS, 
+        changeCount: 0,
+        createdAt: serverTimestamp()
+      });
     }catch(err){
       errEl.textContent = friendlyAuthError(err);
     }
@@ -698,13 +707,22 @@ if(firebaseConfig){
 
   document.getElementById('loginForm').addEventListener('submit', async(e)=>{
     e.preventDefault();
-    const username = document.getElementById('loginUsername').value.trim();
+    const usernameInput = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
     const errEl = document.getElementById('loginError');
     errEl.textContent='';
 
+    let emailToUse = usernameInput;
+    if(!usernameInput.includes('@')){
+      const q = query(collection(db,'users'), where('username','==',usernameInput), limit(1));
+      const qSnap = await getDocs(q);
+      if(!qSnap.empty){
+        emailToUse = qSnap.docs[0].data().email || usernameInput;
+      }
+    }
+
     try{
-      await signInWithEmailAndPassword(auth, usernameToEmail(username), password);
+      await signInWithEmailAndPassword(auth, emailToUse, password);
     }catch(err){
       errEl.textContent = friendlyAuthError(err);
     }
@@ -712,51 +730,89 @@ if(firebaseConfig){
 
   document.getElementById('logoutBtn').addEventListener('click', ()=>signOut(auth));
 
-  // Profile modal bindings
-  const profileModal = document.getElementById('profileModal');
-  document.getElementById('profileIconBtn').addEventListener('click', ()=>{
-    document.getElementById('newUsernameInput').value = currentUsername || '';
-    document.getElementById('profileError').textContent = '';
-    profileModal.classList.add('active');
-  });
-  document.getElementById('closeProfileModal').addEventListener('click', ()=>profileModal.classList.remove('active'));
-
   document.getElementById('saveUsernameBtn').addEventListener('click', async()=>{
     const newName = document.getElementById('newUsernameInput').value.trim();
     const errEl = document.getElementById('profileError');
     errEl.textContent = '';
+    
     if(!newName || newName.length > 30){
-      errEl.textContent = 'Username must be 1 to 30 characters.';
+      errEl.textContent = 'Username must be between 1 and 30 characters.';
       return;
     }
+
+    if(!isAdmin && changeCount >= 2){
+      errEl.textContent = 'You have already reached the maximum limit of 2 username changes.';
+      return;
+    }
+
     try{
-      await updateDoc(doc(db,'users',currentUid), { username: newName });
-      profileModal.classList.remove('active');
+      await runTransaction(db, async tx => {
+        const q = query(collection(db,'users'), where('username','==',newName));
+        const existing = await getDocs(q);
+        if(!existing.empty){
+          throw new Error('taken');
+        }
+
+        const userRef = doc(db,'users',currentUid);
+        const userSnap = await tx.get(userRef);
+        if(!userSnap.exists()) throw new Error('user-not-found');
+        const oldName = userSnap.data().username;
+        const currentChanges = userSnap.data().changeCount || 0;
+
+        if(oldName === newName) throw new Error('same');
+
+        tx.update(userRef, {
+          username: newName,
+          changeCount: isAdmin ? currentChanges : currentChanges + 1
+        });
+
+        const logRef = doc(collection(db, 'nameChanges'));
+        tx.set(logRef, {
+          uid: currentUid,
+          oldName,
+          newName,
+          timestamp: serverTimestamp(),
+          reverted: false
+        });
+      });
+
+      document.getElementById('newUsernameInput').value = '';
+      errEl.style.color = 'var(--accent)';
+      errEl.textContent = 'Username updated successfully!';
+      setTimeout(()=>{ errEl.textContent = ''; errEl.style.color = 'var(--loss)'; }, 3000);
     }catch(err){
-      errEl.textContent = 'Failed to update username.';
+      if(err.message === 'taken') errEl.textContent = 'That username is already taken. Choose another.';
+      else if(err.message === 'same') errEl.textContent = 'That is already your current username.';
+      else errEl.textContent = 'Failed to update username.';
     }
   });
 
   function friendlyAuthError(err){
-    console.error('Firebase error:', err);
     return `${err.code || 'unknown-error'}: ${err.message || 'Something went wrong'}`;
   }
 
   onAuthStateChanged(auth, async user=>{
     if(unsubUserDoc){ unsubUserDoc(); unsubUserDoc=null; }
     if(unsubMyBets){ unsubMyBets(); unsubMyBets=null; }
+    if(unsubNameChanges){ unsubNameChanges(); unsubNameChanges=null; }
 
     if(user){
       currentUid = user.uid;
       document.getElementById('authLoggedOut').style.display='none';
       document.getElementById('authLoggedIn').style.display='block';
-      document.getElementById('profileIconBtn').style.display='block';
+      document.getElementById('profileTabBtn').style.display='block';
 
       unsubUserDoc = onSnapshot(doc(db,'users',currentUid), async snap=>{
         if(!snap.exists()){
           try {
-            const fallbackUsername = user.email ? user.email.split('@')[0] : 'Player';
-            await setDoc(doc(db,'users',currentUid), { username: fallbackUsername, tokens: STARTING_TOKENS, createdAt: serverTimestamp() });
+            const fallbackEmail = user.email || 'user@example.com';
+            await setDoc(doc(db,'users',currentUid), { 
+              username: fallbackEmail, 
+              email: fallbackEmail,
+              tokens: STARTING_TOKENS, 
+              changeCount: 0,
+              createdAt: serverTimestamp()
+            });
             return;
           } catch (repairErr) {
             console.error('Failed to recover missing user document:', repairErr);
@@ -767,11 +823,17 @@ if(firebaseConfig){
         const data = snap.data();
         currentUsername = data.username;
         currentTokens = data.tokens;
+        changeCount = data.changeCount || 0;
         isAdmin = Array.isArray(ADMIN_UIDS) && ADMIN_UIDS.includes(currentUid);
 
         document.getElementById('accountName').textContent = currentUsername;
         document.getElementById('tokenBalance').textContent = Math.round(currentTokens) + ' tokens';
         document.getElementById('adminSection').style.display = isAdmin ? 'block' : 'none';
+        document.getElementById('adminNameChangesSection').style.display = isAdmin ? 'block' : 'none';
+
+        if(isAdmin){
+          listenToNameChanges();
+        }
 
         if(isAdmin && window.__eloBoard && typeof window.onEloUpdated === 'function'){
           window.onEloUpdated(window.__eloBoard);
@@ -783,15 +845,60 @@ if(firebaseConfig){
       document.getElementById('fixturesSection').style.display='block';
       document.getElementById('myBetsSection').style.display='block';
     }else{
-      currentUid = null; currentUsername = null; currentTokens = 0; isAdmin = false;
+      currentUid = null; currentUsername = null; currentTokens = 0; changeCount = 0; isAdmin = false;
       document.getElementById('authLoggedOut').style.display='block';
       document.getElementById('authLoggedIn').style.display='none';
-      document.getElementById('profileIconBtn').style.display='none';
+      document.getElementById('profileTabBtn').style.display='none';
       document.getElementById('fixturesSection').style.display='none';
       document.getElementById('myBetsSection').style.display='none';
       document.getElementById('adminSection').style.display='none';
+      document.getElementById('adminNameChangesSection').style.display='none';
     }
   });
+
+  function listenToNameChanges(){
+    if(unsubNameChanges) return;
+    unsubNameChanges = onSnapshot(query(collection(db, 'nameChanges'), orderBy('timestamp', 'desc'), limit(50)), snap => {
+      const body = document.getElementById('adminNameChangesBody');
+      if(snap.empty){
+        body.innerHTML = '<tr><td colspan="5" class="empty">No name changes recorded yet.</td></tr>';
+        return;
+      }
+      body.innerHTML = '';
+      snap.forEach(d => {
+        const item = d.data();
+        const dateStr = item.timestamp?.toDate ? item.timestamp.toDate().toLocaleString() : 'Just now';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${dateStr}</td>
+          <td><code>${item.uid.substring(0,6)}...</code></td>
+          <td>${escapeHtmlBet(item.oldName)}</td>
+          <td>${escapeHtmlBet(item.newName)}</td>
+          <td>${item.reverted ? '<span class="status-badge">Reverted</span>' : `<button type="button" class="btn-secondary" style="padding:4px 8px; font-size:0.8rem;" data-revert="${d.id}" data-uid="${item.uid}" data-old="${escapeAttrBet(item.oldName)}">Reverse</button>`}</td>
+        `;
+        body.appendChild(tr);
+      });
+
+      body.querySelectorAll('[data-revert]').forEach(btn => {
+        btn.addEventListener('click', () => reverseNameChange(btn.dataset.revert, btn.dataset.uid, btn.dataset.old));
+      });
+    });
+  }
+
+  async function reverseNameChange(logId, targetUid, oldName){
+    if(!confirm(`Are you sure you want to revert this user's name back to "${oldName}"?`)) return;
+    try {
+      await runTransaction(db, async tx => {
+        const userRef = doc(db, 'users', targetUid);
+        tx.update(userRef, { username: oldName });
+        const logRef = doc(db, 'nameChanges', logId);
+        tx.update(logRef, { reverted: true });
+      });
+      alert('Username successfully reversed.');
+    } catch(err){
+      alert('Failed to reverse username change.');
+    }
+  }
 
   onSnapshot(query(collection(db,'users'), orderBy('tokens','desc'), limit(50)), snap=>{
     const section = document.getElementById('tokenBoardSection');
@@ -906,8 +1013,11 @@ if(firebaseConfig){
       body.innerHTML='';
       snap.forEach(d=>{
         const b=d.data();
-        const resultLabel = b.status==='pending' ? 'Pending' : b.status==='won' ? `Won +${b.potentialPayout}` : 'Lost';
-        const cls = b.status==='won' ? 'status-confirmed' : b.status==='lost' ? 'status-voided' : '';
+        let resultLabel = 'Pending';
+        let cls = '';
+        if(b.status === 'won'){ resultLabel = `Won +${b.potentialPayout}`; cls = 'status-confirmed'; }
+        else if(b.status === 'lost'){ resultLabel = 'Lost'; cls = 'status-voided'; }
+        else if(b.status === 'refunded'){ resultLabel = 'Refunded'; cls = ''; }
         body.innerHTML += `
           <tr>
             <td>${escapeHtmlBet(b.matchup)}</td>
@@ -968,16 +1078,21 @@ if(firebaseConfig){
     if(!isAdmin) return;
     const container = document.getElementById('adminSettleList');
     const open = fixturesCache.filter(f=>f.status==='open');
-    if(!open.length){ container.innerHTML = '<div class="empty">No open fixtures to settle.</div>'; return; }
+    if(!open.length){ container.innerHTML = '<div class="empty">No open fixtures to manage.</div>'; return; }
     container.innerHTML = open.map(f=>`
       <div class="settle-row">
         <span>${escapeHtmlBet(f.playerA)} vs ${escapeHtmlBet(f.playerB)}</span>
         <button type="button" class="btn-secondary" data-settle="${f.id}" data-winner="${escapeAttrBet(f.playerA)}">${escapeHtmlBet(f.playerA)} won</button>
         <button type="button" class="btn-secondary" data-settle="${f.id}" data-winner="${escapeAttrBet(f.playerB)}">${escapeHtmlBet(f.playerB)} won</button>
+        <button type="button" class="btn-danger" data-delete="${f.id}">Delete &amp; Refund</button>
       </div>
     `).join('');
+
     container.querySelectorAll('[data-settle]').forEach(btn=>{
       btn.addEventListener('click', ()=>settleFixture(btn.dataset.settle, btn.dataset.winner));
+    });
+    container.querySelectorAll('[data-delete]').forEach(btn=>{
+      btn.addEventListener('click', ()=>deleteFixtureAndRefund(btn.dataset.delete));
     });
   }
 
@@ -999,6 +1114,23 @@ if(firebaseConfig){
       });
     }
     await updateDoc(doc(db,'fixtures',fixtureId), { status: 'settled', winner });
+  }
+
+  async function deleteFixtureAndRefund(fixtureId){
+    if(!confirm('Delete this fixture and refund all staked tokens to bettors?')) return;
+    const betsSnap = await getDocs(query(collection(db,'bets'), where('fixtureId','==',fixtureId), where('status','==','pending')));
+    for(const betDoc of betsSnap.docs){
+      const bet = betDoc.data();
+      await runTransaction(db, async tx=>{
+        const userRef = doc(db,'users',bet.uid);
+        const uSnap = await tx.get(userRef);
+        if(uSnap.exists()){
+          tx.update(userRef, { tokens: uSnap.data().tokens + bet.amount });
+        }
+        tx.update(doc(db,'bets',betDoc.id), { status: 'refunded' });
+      });
+    }
+    await updateDoc(doc(db,'fixtures',fixtureId), { status: 'deleted' });
   }
 
   function escapeHtmlBet(s){
