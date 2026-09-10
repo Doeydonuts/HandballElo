@@ -1,5 +1,5 @@
 date,league,player_a,player_b,winner,status
-2026-10-09,League A,Jonan,Will S,Jonan,confirmed
+2026-10-09,Other,Jonan,Will S,Jonan,confirmed
 2025-08-01,CS1,Tyler,Jackson,Tyler,confirmed
 2025-08-01,CS1,Tyler,Aiden,Tyler,confirmed
 2025-08-01,CS1,Tyler,Conor,Tyler,confirmed
@@ -645,7 +645,7 @@ date,league,player_a,player_b,winner,status
 2025-04-04,CS3,Charlie,Regan,Regan,confirmed
 2025-04-04,CS3,Charlie,Regan,Charlie,confirmed
 2025-04-04,CS3,Jake,Jai,Jake,confirmed
-2025-04-04,Jake,Jai,Jai,confirmed
+2025-04-04,CS3,Jake,Jai,confirmed
 2025-04-04,CS3,Jake,Jai,Jake,confirmed
 2025-04-05,CS3,Jai,Regan,Regan,confirmed
 2025-04-05,CS3,Jai,Regan,Jai,confirmed
