@@ -218,7 +218,6 @@ margin-bottom:-2px;
 .leaderboard-controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px;}
 .tab-panel{display:none;}
 .tab-panel.active{display:block;}
-
 .bracket-scroll{overflow-x:auto; padding-bottom:10px;}
 .bracket-rounds{display:flex; gap:18px; min-width:1400px;}
 .bracket-round{display:flex; flex-direction:column; justify-content:space-around; min-width:170px;}
@@ -443,6 +442,7 @@ margin-bottom:-2px;
   </div>
 
   <div id="tab-bracket" class="tab-panel">
+
     <section id="bracketAdminSetup" style="display:none;">
       <h2>Admin: Bracket Setup</h2>
       <div class="predictor" style="align-items:center; margin-bottom:14px;">
@@ -804,6 +804,16 @@ document.querySelectorAll('.maintab').forEach(btn=>{
     document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab === 'betting'){
+      if(typeof window.attachBettingListeners === 'function') window.attachBettingListeners();
+    } else {
+      if(typeof window.detachBettingListeners === 'function') window.detachBettingListeners();
+    }
+    if(btn.dataset.tab === 'bracket'){
+      if(typeof window.attachBracketListeners === 'function') window.attachBracketListeners();
+    } else {
+      if(typeof window.detachBracketListeners === 'function') window.detachBracketListeners();
+    }
   });
 });
 
@@ -845,6 +855,7 @@ function handleFiles(fileList){
         document.getElementById('loaderFiles').textContent = 'Import failed: ' + (err.message || err);
       }
     }else{
+      // No Firestore available — fall back to local-only preview (legacy behavior)
       if(newPlayers) playersRaw = newPlayers;
       if(newMatches) matchesRaw = newMatches;
       document.getElementById('loaderFiles').textContent = namesJoined;
@@ -863,6 +874,8 @@ function initLoader(){
   dropzone.addEventListener('drop', e=>handleFiles(e.dataTransfer.files));
 }
 
+// Exposed so the Firebase module script can drive the loading UI/status text,
+// and so it can fall back to the old CSV-fetch flow if Firebase isn't configured at all.
 window.setEloLoadingStatus = setStatus;
 window.initEloDataFallbackCSV = async function(){
   document.getElementById('loaderSection').style.display = 'block';
@@ -1143,10 +1156,15 @@ if(firebaseConfig){
         renderFixtures();
         renderMyBets();
         renderProfileStats();
+        renderBracketAdminSetup();
+        renderBracketPublic();
       });
 
       document.getElementById('fixturesSection').style.display='block';
       document.getElementById('myBetsSection').style.display='block';
+      if(document.querySelector('.maintab[data-tab="bracket"]').classList.contains('active')){
+        window.attachBracketListeners();
+      }
     }else{
       currentUid = null; currentUsername = null; currentTokens = 0; changeCount = 0; isAdmin = false;
       document.getElementById('authLoggedOut').style.display='block';
@@ -1159,6 +1177,9 @@ if(firebaseConfig){
       document.getElementById('adminAllUsersSection').style.display='none';
       document.getElementById('loaderSection').style.display='none';
       renderProfileStats();
+      myPicks = {};
+      renderBracketAdminSetup();
+      renderBracketPublic();
     }
   });
 
@@ -1240,41 +1261,56 @@ if(firebaseConfig){
     }
   }
 
-  onSnapshot(query(collection(db,'users'), orderBy('tokens','desc'), limit(50)), snap=>{
-    const section = document.getElementById('tokenBoardSection');
-    const body = document.getElementById('tokenBoardBody');
-    if(snap.empty){ section.style.display='none'; return; }
-    section.style.display='block';
-    body.innerHTML='';
-    let rank=1;
-    snap.forEach(d=>{
-      const data=d.data();
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td class="rank">${rank++}</td><td class="player-name">${escapeHtmlBet(data.username)}</td><td class="elo-val">${Math.round(data.tokens)}</td>`;
-      body.appendChild(tr);
-    });
-  });
+  let unsubTokenBoard = null;
+  let unsubBets = null;
+  let unsubFixtures = null;
+
+  window.attachBettingListeners = function(){
+    if(!unsubTokenBoard){
+      unsubTokenBoard = onSnapshot(query(collection(db,'users'), orderBy('tokens','desc'), limit(50)), snap=>{
+        const section = document.getElementById('tokenBoardSection');
+        const body = document.getElementById('tokenBoardBody');
+        if(snap.empty){ section.style.display='none'; return; }
+        section.style.display='block';
+        body.innerHTML='';
+        let rank=1;
+        snap.forEach(d=>{
+          const data=d.data();
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="rank">${rank++}</td><td class="player-name">${escapeHtmlBet(data.username)}</td><td class="elo-val">${Math.round(data.tokens)}</td>`;
+          body.appendChild(tr);
+        });
+      });
+    }
+    if(!unsubBets){
+      unsubBets = onSnapshot(query(collection(db,'bets')), snap=>{
+        allBetsCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+        renderFixtures();
+        renderMyBets();
+        renderProfileStats();
+      });
+    }
+    if(!unsubFixtures){
+      unsubFixtures = onSnapshot(collection(db,'fixtures'), snap=>{
+        fixturesCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
+        fixturesCache.sort((a,b)=>{
+          const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+          const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+          return tb - ta;
+        });
+        renderFixtures();
+        renderAdminSettleList();
+      });
+    }
+  };
+  window.detachBettingListeners = function(){
+    if(unsubTokenBoard){ unsubTokenBoard(); unsubTokenBoard=null; }
+    if(unsubBets){ unsubBets(); unsubBets=null; }
+    if(unsubFixtures){ unsubFixtures(); unsubFixtures=null; }
+  };
 
   let fixturesCache=[];
   let allBetsCache=[];
-
-  onSnapshot(query(collection(db,'bets')), snap=>{
-    allBetsCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-    renderFixtures();
-    renderMyBets();
-    renderProfileStats();
-  });
-
-  onSnapshot(collection(db,'fixtures'), snap=>{
-    fixturesCache = snap.docs.map(d=>({ id:d.id, ...d.data() }));
-    fixturesCache.sort((a,b)=>{
-      const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-      const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-      return tb - ta;
-    });
-    renderFixtures();
-    renderAdminSettleList();
-  });
 
   const selectedSide={};
   function renderFixtures(){
@@ -1291,6 +1327,7 @@ if(firebaseConfig){
       card.className='fixture-card';
       const sel = selectedSide[f.id];
 
+      // Calculate total tokens bet on each player for this fixture
       let stakedA = 0;
       let stakedB = 0;
       allBetsCache.forEach(b => {
@@ -1446,6 +1483,7 @@ if(firebaseConfig){
       if(board.some(p=>p.player===prevB)) mb.value = prevB; else if(board.length>1) mb.selectedIndex = 1;
       updateMatchWinnerOptions();
     }
+    renderBracketAdminSetup();
   };
 
   function updateMatchWinnerOptions(){
@@ -1642,6 +1680,9 @@ if(firebaseConfig){
   }
   document.getElementById('adminMatchSearch').oninput = renderAdminMatches;
 
+  // Reverses previously-paid bets for a fixture and re-pays them against a
+  // corrected winner. Only touches bets already marked won/lost (i.e. the
+  // fixture was already settled) — pending/refunded bets are left alone.
   async function resettleFixtureBets(fixtureId, newWinner){
     const betsSnap = await getDocs(query(
       collection(db,'bets'),
@@ -1652,16 +1693,16 @@ if(firebaseConfig){
       const bet = betDoc.data();
       const wasWon = bet.status === 'won';
       const willWin = bet.pick === newWinner;
-      if(wasWon === willWin) continue;
+      if(wasWon === willWin) continue; // no change needed for this bet
       try{
         await runTransaction(db, async tx=>{
           const betRef = doc(db,'bets',betDoc.id);
           const userRef = doc(db,'users',bet.uid);
-          const uSnap = await tx.get(userRef);
+          const uSnap = await tx.get(userRef); // read before any writes
           if(!uSnap.exists()) throw new Error('user-not-found');
           let tokens = uSnap.data().tokens;
-          if(wasWon) tokens -= bet.potentialPayout;
-          if(willWin) tokens += bet.potentialPayout;
+          if(wasWon) tokens -= bet.potentialPayout; // claw back the old payout
+          if(willWin) tokens += bet.potentialPayout; // pay the corrected winner
           tx.update(userRef, { tokens });
           tx.update(betRef, { status: willWin ? 'won' : 'lost' });
         });
@@ -1737,6 +1778,8 @@ if(firebaseConfig){
         await runTransaction(db, async tx=>{
           const betRef = doc(db,'bets',betDoc.id);
           const userRef = doc(db,'users',bet.uid);
+          // IMPORTANT: all reads in a Firestore transaction must happen
+          // before any writes, so the user doc is read here first.
           const uSnap = won ? await tx.get(userRef) : null;
           if(won && !uSnap.exists()) throw new Error('user-not-found');
 
@@ -1751,6 +1794,8 @@ if(firebaseConfig){
     }
     await updateDoc(doc(db,'fixtures',fixtureId), { status: 'settled', winner });
 
+    // Settling a fixture also records the result as a match, so it feeds
+    // into the Elo leaderboard. Deleting a fixture (below) never does this.
     if(fixture){
       try{
         await addDoc(collection(db,'matches'), {
@@ -1791,6 +1836,237 @@ if(firebaseConfig){
     return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   }
   function escapeAttrBet(s){ return escapeHtmlBet(s); }
+
+  // ===================== BRACKET (March Madness style, 64 players) =====================
+
+  const ROUND_COUNTS = {1:32,2:16,3:8,4:4,5:2,6:1};
+  const ROUND_POINTS = {1:1,2:2,3:4,4:8,5:16,6:32};
+  const ROUND_NAMES  = {1:'Round of 64',2:'Round of 32',3:'Sweet 16',4:'Elite 8',5:'Final 4',6:'Championship'};
+  const gameKey = (r,i)=>`r${r}_${i}`;
+
+  function emptyGames(){
+    const games = {};
+    for(let r=1;r<=6;r++) for(let i=0;i<ROUND_COUNTS[r];i++)
+      games[gameKey(r,i)] = { a:'', b:'', winner:'', manualA:false, manualB:false };
+    return games;
+  }
+
+  // Cascades players[] and prior-round winners forward into every game's a/b,
+  // respecting manual overrides. Clears any winner that no longer matches
+  // either side (e.g. an override just changed who's playing).
+  function recomputeGames(players, games){
+    for(let i=0;i<32;i++){
+      const key = gameKey(1,i);
+      const g = games[key] || (games[key] = {a:'',b:'',winner:'',manualA:false,manualB:false});
+      if(!g.manualA) g.a = players[2*i] || '';
+      if(!g.manualB) g.b = players[2*i+1] || '';
+      if(g.winner && g.winner!==g.a && g.winner!==g.b) g.winner='';
+    }
+    for(let r=2;r<=6;r++){
+      for(let i=0;i<ROUND_COUNTS[r];i++){
+        const key = gameKey(r,i);
+        const g = games[key] || (games[key] = {a:'',b:'',winner:'',manualA:false,manualB:false});
+        const feedA = games[gameKey(r-1,2*i)], feedB = games[gameKey(r-1,2*i+1)];
+        if(!g.manualA) g.a = feedA ? feedA.winner : '';
+        if(!g.manualB) g.b = feedB ? feedB.winner : '';
+        if(g.winner && g.winner!==g.a && g.winner!==g.b) g.winner='';
+      }
+    }
+    return games;
+  }
+
+  // A user's own bracket, cascaded purely from their picks (independent of reality).
+  function buildUserBracket(players, picks){
+    const b = {};
+    for(let i=0;i<32;i++){
+      const key = gameKey(1,i);
+      b[key] = { a: players[2*i]||'', b: players[2*i+1]||'', winner: picks[key]||'' };
+    }
+    for(let r=2;r<=6;r++){
+      for(let i=0;i<ROUND_COUNTS[r];i++){
+        const key = gameKey(r,i);
+        const feedA = b[gameKey(r-1,2*i)], feedB = b[gameKey(r-1,2*i+1)];
+        const a = feedA.winner||'', bb = feedB.winner||'';
+        let winner = picks[key]||'';
+        if(winner && winner!==a && winner!==bb) winner='';
+        b[key] = { a, b:bb, winner };
+      }
+    }
+    return b;
+  }
+
+  function scoreForPicks(picks, actualGames){
+    let score = 0;
+    for(let r=1;r<=6;r++) for(let i=0;i<ROUND_COUNTS[r];i++){
+      const key = gameKey(r,i), actual = actualGames[key];
+      if(actual && actual.winner && picks[key] && picks[key]===actual.winner) score += ROUND_POINTS[r];
+    }
+    return score;
+  }
+
+  let bracketDoc = { locked:false, players:new Array(64).fill(''), games: emptyGames() };
+  let myPicks = {};
+  let unsubBracket=null, unsubMyPrediction=null, unsubBracketLb=null;
+
+  window.attachBracketListeners = function(){
+    if(!unsubBracket){
+      unsubBracket = onSnapshot(doc(db,'bracket','main'), snap=>{
+        bracketDoc = snap.exists() ? snap.data() : { locked:false, players:new Array(64).fill(''), games: emptyGames() };
+        renderBracketAdminSetup();
+        renderBracketPublic();
+      });
+    }
+    if(!unsubMyPrediction && currentUid){
+      unsubMyPrediction = onSnapshot(doc(db,'predictions',currentUid), snap=>{
+        myPicks = snap.exists() ? (snap.data().picks||{}) : {};
+        renderBracketPublic();
+      });
+    }
+    if(!unsubBracketLb){
+      unsubBracketLb = onSnapshot(query(collection(db,'bracketScores'), orderBy('score','desc'), limit(50)), snap=>{
+        const section = document.getElementById('bracketLeaderboardSection');
+        const body = document.getElementById('bracketLbBody');
+        if(snap.empty){ section.style.display='none'; return; }
+        section.style.display='block';
+        body.innerHTML = snap.docs.map((d,i)=>{
+          const data = d.data();
+          return `<tr><td class="rank">${i+1}</td><td class="player-name">${escapeHtmlBet(data.username)}</td><td class="elo-val">${data.score}</td></tr>`;
+        }).join('');
+      });
+    }
+  };
+  window.detachBracketListeners = function(){
+    if(unsubBracket){ unsubBracket(); unsubBracket=null; }
+    if(unsubMyPrediction){ unsubMyPrediction(); unsubMyPrediction=null; }
+    if(unsubBracketLb){ unsubBracketLb(); unsubBracketLb=null; }
+  };
+
+  async function recomputeAllScores(actualGames){
+    if(!isAdmin) return;
+    const snap = await getDocs(collection(db,'predictions'));
+    await Promise.all(snap.docs.map(d=>{
+      const data = d.data();
+      const score = scoreForPicks(data.picks||{}, actualGames);
+      return setDoc(doc(db,'bracketScores', d.id), { username: data.username, score });
+    }));
+  }
+
+  async function saveSlots(players){
+    const games = recomputeGames(players, bracketDoc.games || emptyGames());
+    await setDoc(doc(db,'bracket','main'), { locked: bracketDoc.locked, players, games });
+  }
+  async function toggleLock(){
+    await updateDoc(doc(db,'bracket','main'), { locked: !bracketDoc.locked });
+  }
+  async function setGameWinner(round, idx, name){
+    const key = gameKey(round, idx);
+    const games = { ...bracketDoc.games, [key]: { ...bracketDoc.games[key], winner:name } };
+    recomputeGames(bracketDoc.players, games);
+    await setDoc(doc(db,'bracket','main'), { ...bracketDoc, games });
+    await recomputeAllScores(games);
+  }
+  async function overrideSlot(round, idx, side){
+    const name = prompt('Replacement player name for this slot:');
+    if(!name) return;
+    const key = gameKey(round, idx);
+    const g = { ...bracketDoc.games[key] };
+    if(side==='a'){ g.a=name; g.manualA=true; } else { g.b=name; g.manualB=true; }
+    g.winner='';
+    const games = { ...bracketDoc.games, [key]: g };
+    recomputeGames(bracketDoc.players, games);
+    await setDoc(doc(db,'bracket','main'), { ...bracketDoc, games });
+  }
+  async function pickWinner(round, idx, name){
+    if(bracketDoc.locked || !currentUid) return;
+    myPicks = { ...myPicks, [gameKey(round,idx)]: name };
+    renderBracketPublic();
+  }
+  async function savePicks(){
+    if(!currentUid) return;
+    await setDoc(doc(db,'predictions',currentUid), { uid: currentUid, username: currentUsername, picks: myPicks, updatedAt: serverTimestamp() }, { merge:true });
+  }
+  document.getElementById('savePicksBtn').addEventListener('click', savePicks);
+  document.getElementById('toggleLockBtn').addEventListener('click', toggleLock);
+  document.getElementById('saveSlotsBtn').addEventListener('click', ()=>{
+    const players = new Array(64).fill('');
+    document.querySelectorAll('#bracketSlotGrid [data-slot]').forEach(s=>{ players[Number(s.dataset.slot)] = s.value; });
+    saveSlots(players);
+  });
+
+  function renderBracketAdminSetup(){
+    const section = document.getElementById('bracketAdminSetup');
+    section.style.display = isAdmin ? 'block' : 'none';
+    if(!isAdmin) return;
+    document.getElementById('bracketLockStatus').textContent = bracketDoc.locked ? 'LOCKED (tournament started)' : 'Open for setup / predictions';
+    document.getElementById('toggleLockBtn').textContent = bracketDoc.locked ? 'Unlock bracket' : 'Lock bracket';
+    const playerNames = (window.__eloBoard||[]).map(p=>p.player);
+    document.getElementById('bracketSlotGrid').innerHTML = bracketDoc.players.map((val,i)=>{
+      const opts = ['<option value="">— empty —</option>']
+        .concat(playerNames.map(n=>`<option value="${escapeAttrBet(n)}" ${n===val?'selected':''}>${escapeHtmlBet(n)}</option>`)).join('');
+      return `<div class="field"><label>Slot ${i+1}</label><select data-slot="${i}">${opts}</select></div>`;
+    }).join('');
+  }
+
+  function renderBracketPublic(){
+    const section = document.getElementById('bracketViewSection');
+    if(!bracketDoc.players.some(p=>p)){ section.style.display='none'; return; }
+    section.style.display='block';
+    const editable = currentUid && !bracketDoc.locked;
+    const userView = buildUserBracket(bracketDoc.players, myPicks);
+    const container = document.getElementById('bracketRounds');
+    container.innerHTML = '';
+    for(let r=1;r<=6;r++){
+      const col = document.createElement('div');
+      col.className = 'bracket-round';
+      col.innerHTML = `<div class="bracket-round-title">${ROUND_NAMES[r]} · ${ROUND_POINTS[r]}pt</div>`;
+      for(let i=0;i<ROUND_COUNTS[r];i++){
+        const key = gameKey(r,i);
+        const actual = bracketDoc.games[key] || {a:'',b:'',winner:''};
+        const mine = userView[key] || {a:'',b:'',winner:''};
+        const gameEl = document.createElement('div');
+        gameEl.className = 'bracket-game';
+        ['a','b'].forEach(side=>{
+          const name = mine[side] || actual[side] || '';
+          const decided = !!actual.winner;
+          const isPicked = currentUid && mine.winner === name && name;
+          const cls = ['bracket-slot'];
+          if(!name) cls.push('empty-slot');
+          if(isPicked) cls.push('pick-selected');
+          if(decided && actual.winner===name) cls.push('actual-winner');
+          if(decided && isPicked && actual.winner!==name) cls.push('pick-wrong');
+          const slot = document.createElement('div');
+          slot.className = cls.join(' ');
+          slot.innerHTML = `<span>${escapeHtmlBet(name||'TBD')}</span>`;
+          if(isAdmin && actual.a && actual.b && name && actual.winner!==name){
+            slot.style.cursor='pointer';
+            slot.onclick = ()=> setGameWinner(r,i,name);
+            const editBtn = document.createElement('span');
+            editBtn.textContent='✎'; editBtn.style.cursor='pointer';
+            editBtn.onclick=(e)=>{ e.stopPropagation(); overrideSlot(r,i,side); };
+            slot.appendChild(editBtn);
+          } else if(editable && name && mine.a && mine.b){
+            slot.style.cursor='pointer';
+            slot.onclick = ()=> pickWinner(r,i,name);
+          }
+          gameEl.appendChild(slot);
+        });
+        col.appendChild(gameEl);
+      }
+      container.appendChild(col);
+    }
+    document.getElementById('bracketMyScoreSection').style.display = currentUid ? 'flex' : 'none';
+    if(currentUid) document.getElementById('myBracketScore').textContent = scoreForPicks(myPicks, bracketDoc.games) + ' pts';
+    document.getElementById('bracketLoginNotice').style.display = currentUid ? 'none' : 'block';
+  }
+
+  // If the Bracket tab happens to already be the active tab on initial load
+  // (e.g. a bookmark), make sure its listeners are attached.
+  if(document.querySelector('.maintab[data-tab="bracket"]').classList.contains('active')){
+    window.attachBracketListeners();
+  }
+  if(document.querySelector('.maintab[data-tab="betting"]').classList.contains('active')){
+    window.attachBettingListeners();
+  }
 }
 </script>
 </body>
