@@ -218,6 +218,18 @@ margin-bottom:-2px;
 .leaderboard-controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:10px;}
 .tab-panel{display:none;}
 .tab-panel.active{display:block;}
+
+.bracket-scroll{overflow-x:auto; padding-bottom:10px;}
+.bracket-rounds{display:flex; gap:18px; min-width:1400px;}
+.bracket-round{display:flex; flex-direction:column; justify-content:space-around; min-width:170px;}
+.bracket-round-title{font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-muted); font-weight:700; text-align:center; margin-bottom:10px;}
+.bracket-game{border:1px solid var(--concrete-line); border-radius:5px; margin-bottom:14px; overflow:hidden;}
+.bracket-slot{padding:8px 10px; font-size:0.85rem; cursor:default; border-bottom:1px solid var(--concrete-line); display:flex; justify-content:space-between; align-items:center; gap:6px;}
+.bracket-slot:last-child{border-bottom:none;}
+.bracket-slot.pick-selected{background:rgba(30,170,58,0.18); font-weight:700;}
+.bracket-slot.actual-winner{color:var(--accent);}
+.bracket-slot.pick-wrong{color:var(--loss); text-decoration:line-through;}
+.bracket-slot.empty-slot{color:var(--ink-muted);}
 </style>
 </head>
 <body>
@@ -237,6 +249,7 @@ margin-bottom:-2px;
     <div class="maintabs-left">
       <button class="maintab active" data-tab="elo">Elo &amp; leaderboard</button>
       <button class="maintab" data-tab="betting">Betting</button>
+      <button class="maintab" data-tab="bracket">Bracket</button>
     </div>
     <button class="maintab" data-tab="profile" id="profileTabBtn" style="display:none;">Profile</button>
   </nav>
@@ -426,6 +439,49 @@ margin-bottom:-2px;
 
     <div class="empty" id="bettingSetupNotice" style="display:none;">
       Betting isn't connected yet — paste your Firebase project config into <code>firebase-config.js</code> to turn this tab on.
+    </div>
+  </div>
+
+  <div id="tab-bracket" class="tab-panel">
+    <section id="bracketAdminSetup" style="display:none;">
+      <h2>Admin: Bracket Setup</h2>
+      <div class="predictor" style="align-items:center; margin-bottom:14px;">
+        <div class="field" style="flex:0 0 auto;">
+          <label>Bracket status</label>
+          <div id="bracketLockStatus" style="font-weight:800;">—</div>
+        </div>
+        <button class="btn-primary" id="toggleLockBtn">Lock bracket</button>
+      </div>
+      <div class="bet-note">Fill all 64 slots in seed order — slot 1 plays slot 2,
+        slot 3 plays slot 4, etc, in the Round of 64.</div>
+      <div id="bracketSlotGrid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:8px; margin:14px 0;"></div>
+      <button class="btn-primary" id="saveSlotsBtn">Save 64 players</button>
+      <div class="form-error" id="bracketSlotsError"></div>
+    </section>
+
+    <section id="bracketViewSection" style="display:none;">
+      <h2>Bracket <span class="meta" id="bracketMeta"></span></h2>
+      <div class="bracket-scroll"><div id="bracketRounds" class="bracket-rounds"></div></div>
+    </section>
+
+    <section id="bracketMyScoreSection" style="display:none;">
+      <div class="account-bar">
+        <div>Your bracket score</div>
+        <div class="token-balance" id="myBracketScore">—</div>
+        <div class="logout-btn-wrap"><button class="btn-secondary" id="savePicksBtn">Save picks</button></div>
+      </div>
+    </section>
+
+    <section id="bracketLeaderboardSection" style="display:none;">
+      <h2>Bracket Leaderboard</h2>
+      <table class="board">
+        <thead><tr><th>#</th><th>Player</th><th>Score</th></tr></thead>
+        <tbody id="bracketLbBody"></tbody>
+      </table>
+    </section>
+
+    <div class="empty" id="bracketLoginNotice" style="display:none;">
+      Log in on the Betting tab to make picks.
     </div>
   </div>
 
@@ -789,7 +845,6 @@ function handleFiles(fileList){
         document.getElementById('loaderFiles').textContent = 'Import failed: ' + (err.message || err);
       }
     }else{
-      // No Firestore available — fall back to local-only preview (legacy behavior)
       if(newPlayers) playersRaw = newPlayers;
       if(newMatches) matchesRaw = newMatches;
       document.getElementById('loaderFiles').textContent = namesJoined;
@@ -808,8 +863,6 @@ function initLoader(){
   dropzone.addEventListener('drop', e=>handleFiles(e.dataTransfer.files));
 }
 
-// Exposed so the Firebase module script can drive the loading UI/status text,
-// and so it can fall back to the old CSV-fetch flow if Firebase isn't configured at all.
 window.setEloLoadingStatus = setStatus;
 window.initEloDataFallbackCSV = async function(){
   document.getElementById('loaderSection').style.display = 'block';
@@ -1238,7 +1291,6 @@ if(firebaseConfig){
       card.className='fixture-card';
       const sel = selectedSide[f.id];
 
-      // Calculate total tokens bet on each player for this fixture
       let stakedA = 0;
       let stakedB = 0;
       allBetsCache.forEach(b => {
@@ -1590,9 +1642,6 @@ if(firebaseConfig){
   }
   document.getElementById('adminMatchSearch').oninput = renderAdminMatches;
 
-  // Reverses previously-paid bets for a fixture and re-pays them against a
-  // corrected winner. Only touches bets already marked won/lost (i.e. the
-  // fixture was already settled) — pending/refunded bets are left alone.
   async function resettleFixtureBets(fixtureId, newWinner){
     const betsSnap = await getDocs(query(
       collection(db,'bets'),
@@ -1603,16 +1652,16 @@ if(firebaseConfig){
       const bet = betDoc.data();
       const wasWon = bet.status === 'won';
       const willWin = bet.pick === newWinner;
-      if(wasWon === willWin) continue; // no change needed for this bet
+      if(wasWon === willWin) continue;
       try{
         await runTransaction(db, async tx=>{
           const betRef = doc(db,'bets',betDoc.id);
           const userRef = doc(db,'users',bet.uid);
-          const uSnap = await tx.get(userRef); // read before any writes
+          const uSnap = await tx.get(userRef);
           if(!uSnap.exists()) throw new Error('user-not-found');
           let tokens = uSnap.data().tokens;
-          if(wasWon) tokens -= bet.potentialPayout; // claw back the old payout
-          if(willWin) tokens += bet.potentialPayout; // pay the corrected winner
+          if(wasWon) tokens -= bet.potentialPayout;
+          if(willWin) tokens += bet.potentialPayout;
           tx.update(userRef, { tokens });
           tx.update(betRef, { status: willWin ? 'won' : 'lost' });
         });
@@ -1688,8 +1737,6 @@ if(firebaseConfig){
         await runTransaction(db, async tx=>{
           const betRef = doc(db,'bets',betDoc.id);
           const userRef = doc(db,'users',bet.uid);
-          // IMPORTANT: all reads in a Firestore transaction must happen
-          // before any writes, so the user doc is read here first.
           const uSnap = won ? await tx.get(userRef) : null;
           if(won && !uSnap.exists()) throw new Error('user-not-found');
 
@@ -1704,8 +1751,6 @@ if(firebaseConfig){
     }
     await updateDoc(doc(db,'fixtures',fixtureId), { status: 'settled', winner });
 
-    // Settling a fixture also records the result as a match, so it feeds
-    // into the Elo leaderboard. Deleting a fixture (below) never does this.
     if(fixture){
       try{
         await addDoc(collection(db,'matches'), {
