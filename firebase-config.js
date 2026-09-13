@@ -11,5 +11,6 @@ export const firebaseConfig = {
 export const ADMIN_UIDS = [
   "fFEgf8e6ylZxVqORoGr0K5W2Yme2",
   "YkbsW3f1cmSd5DopijW7r1AicXv2",
-  "XLLutQwNuURO4ImmN20Kyd4EORJ2"
+  "XLLutQwNuURO4ImmN20Kyd4EORJ2",
+  "ICVewlma1Xa1esFaJlClQsplPT02"
 ];
